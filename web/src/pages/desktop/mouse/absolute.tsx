@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { useAtomValue } from 'jotai';
+import { getDefaultStore, useAtomValue } from 'jotai';
 import { useMediaQuery } from 'react-responsive';
 
 import { MouseReportAbsolute } from '@/lib/mouse.ts';
 import { client, MessageEvent } from '@/lib/websocket.ts';
-import { scrollDirectionAtom, scrollIntervalAtom } from '@/jotai/mouse.ts';
+import { scrollDirectionAtom, scrollIntervalAtom, isMacroPlayingAtom } from '@/jotai/mouse.ts';
 
 import { MouseAbsoluteEvent } from './types.ts';
 
@@ -305,6 +305,10 @@ export const Absolute = () => {
 
   // Mouse event handler
   function handleMouseEvent(event: MouseAbsoluteEvent) {
+    if (getDefaultStore().get(isMacroPlayingAtom)) {
+      return;
+    }
+
     let report: Uint8Array;
     const mouse = mouseRef.current;
 

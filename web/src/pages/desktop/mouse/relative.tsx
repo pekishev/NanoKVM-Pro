@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { message } from 'antd';
-import { useAtomValue } from 'jotai';
+import { getDefaultStore, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 import { MouseReportRelative } from '@/lib/mouse.ts';
 import { client, MessageEvent } from '@/lib/websocket.ts';
-import { scrollDirectionAtom, scrollIntervalAtom } from '@/jotai/mouse.ts';
+import { isMacroPlayingAtom, scrollDirectionAtom, scrollIntervalAtom } from '@/jotai/mouse.ts';
 
 import { MouseRelativeEvent } from './types.ts';
 
@@ -22,6 +22,10 @@ export const Relative = () => {
 
   // Mouse handler
   function handleMouseEvent(event: MouseRelativeEvent) {
+    if (getDefaultStore().get(isMacroPlayingAtom)) {
+      return;
+    }
+
     let report: Uint8Array;
     const mouse = mouseRef.current;
 
