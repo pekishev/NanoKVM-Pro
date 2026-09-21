@@ -109,6 +109,17 @@ function parseLine(raw: string): ScriptCommand | string {
     return parseClick(name, rest);
   }
 
+  if (name === 'RUN') {
+    const target = unquote(rest).trim();
+    if (!target) {
+      return 'RUN needs a macro name';
+    }
+    if (target.length > 64) {
+      return 'RUN name is too long';
+    }
+    return { type: 'run', name: target };
+  }
+
   return parseKeyLine(raw);
 }
 

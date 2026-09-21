@@ -7,9 +7,10 @@ import type { Macro } from './types.ts';
 
 type MacroItemProps = {
   macro: Macro;
+  macros: Macro[];
 };
 
-export const MacroItem = ({ macro }: MacroItemProps) => {
+export const MacroItem = ({ macro, macros }: MacroItemProps) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -18,7 +19,7 @@ export const MacroItem = ({ macro }: MacroItemProps) => {
     setIsLoading(true);
 
     try {
-      const error = await playMacro(macro);
+      const error = await playMacro(macro, macros);
       if (error) {
         console.log(error);
       }

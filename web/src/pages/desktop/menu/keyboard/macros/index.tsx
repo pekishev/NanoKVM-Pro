@@ -83,7 +83,7 @@ export const Macros = () => {
       {macros.length > 0 ? (
         <>
           {macros.map((macro) => (
-            <MacroItem key={macro.id} macro={macro} />
+            <MacroItem key={macro.id} macro={macro} macros={macros} />
           ))}
           <Divider style={{ margin: '5px 0 5px 0' }} />
         </>
