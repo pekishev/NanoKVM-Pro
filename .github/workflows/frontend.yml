@@ -11,6 +11,7 @@ on:
       - 'web/**'
       - '.github/workflows/frontend.yml'
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: frontend-${{ github.workflow }}-${{ github.ref }}

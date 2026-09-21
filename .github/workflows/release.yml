@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without a leading v, e.g. 1.2.16-fork.1
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      name: ${{ steps.meta.outputs.name }}
+    steps:
+      - name: Resolve version
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          fi
+          NAME="nanokvm@${VERSION}"
+
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "name=${NAME}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "version=${VERSION}"
+          echo "tag=${TAG}"
+
+  frontend:
+    name: Frontend
+    uses: ./.github/workflows/frontend.yml
+
+  backend:
+    name: Backend
+    needs: meta
+    uses: ./.github/workflows/backend.yml
+    with:
+      version: ${{ needs.meta.outputs.version }}
+
+  publish:
+    name: Publish
+    needs: [meta, frontend, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: pkg/web
+
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: NanoKVM-Server
+          path: pkg
+
+      - name: Package release
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          test -f pkg/NanoKVM-Server
+          test -f pkg/web/index.html
+          chmod +x pkg/NanoKVM-Server
+          printf '%s\n' "$VERSION" > pkg/version
+          {
+            echo "NanoKVM-Pro ${VERSION}"
+            echo
+            echo "Deploy to a device:"
+            echo
+            echo "  scp NanoKVM-Server root@DEVICE:/kvmapp/server/NanoKVM-Server"
+            echo "  scp -r web root@DEVICE:/kvmapp/server/web.new"
+            echo "  ssh root@DEVICE 'rm -rf /kvmapp/server/web && mv /kvmapp/server/web.new /kvmapp/server/web && chmod +x /kvmapp/server/NanoKVM-Server && systemctl restart nanokvm'"
+            echo
+            echo "Optional: copy version to /kvmapp/version"
+          } > pkg/INSTALL.txt
+          tar -C pkg -czf "nanokvm-pro-${VERSION}.tar.gz" NanoKVM-Server web version INSTALL.txt
+          sha256sum "nanokvm-pro-${VERSION}.tar.gz" pkg/NanoKVM-Server | tee sha256.txt
+          ls -lh "nanokvm-pro-${VERSION}.tar.gz" pkg/NanoKVM-Server pkg/web/index.html
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          body: |
+            Fork build from `${{ github.repository }}` @ `${{ github.sha }}`.
+
+            Unpack `nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz` and follow `INSTALL.txt`.
+          files: |
+            nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz
+            pkg/NanoKVM-Server
+            sha256.txt
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

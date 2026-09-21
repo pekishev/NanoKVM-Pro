@@ -13,6 +13,13 @@ on:
       - 'support/scripts/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version string embedded into NanoKVM-Server
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: backend-${{ github.workflow }}-${{ github.ref }}
@@ -63,6 +70,16 @@ jobs:
           } > "${GITHUB_WORKSPACE}/support/toolchains/toolchain.ini"
           test -x "${TARGET_DIR}/${CC_REL}"
           cat "${GITHUB_WORKSPACE}/support/toolchains/toolchain.ini"
+
+      - name: Set version
+        working-directory: server
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=dev
+          fi
+          printf '%s\n' "$VERSION" > version.txt
+          echo "Building version: $VERSION"
 
       - name: Build server
         working-directory: server
