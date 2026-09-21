@@ -171,6 +171,9 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
             <Button size="small" onClick={() => insertSnippet('DELAY 200')}>
               DELAY
             </Button>
+            <Button size="small" onClick={() => insertSnippet('RUN ', false)}>
+              RUN
+            </Button>
             <Button size="small" onClick={() => startPicking('CLICK')}>
               CLICK
             </Button>

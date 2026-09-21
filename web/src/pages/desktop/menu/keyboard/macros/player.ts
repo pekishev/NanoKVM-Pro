@@ -9,7 +9,7 @@ import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
 
 import { charToCodes } from './chars.ts';
 import { parseScript } from './script.ts';
-import type { Macro, MouseButtonName } from './types.ts';
+import type { Macro, MouseButtonName, ScriptCommand } from './types.ts';
 
 const BUTTON_INDEX: Record<MouseButtonName, number> = {
   left: 0,
@@ -80,12 +80,7 @@ async function typeText(text: string) {
   }
 }
 
-export async function playMacro(macro: Macro): Promise<string | null> {
-  const parsed = parseScript(macro.script);
-  if (!parsed.ok) {
-    return `Line ${parsed.line}: ${parsed.error}`;
-  }
-
+export async function playMacro(macro: Macro, macros: Macro[] = []): Promise<string | null> {
   const store = getDefaultStore();
   const previousKeyboard = store.get(isKeyboardEnableAtom);
 
@@ -93,32 +88,83 @@ export async function playMacro(macro: Macro): Promise<string | null> {
   store.set(isMacroPlayingAtom, true);
 
   try {
-    const mouse = new MouseReportAbsolute();
-
-    for (const command of parsed.commands) {
-      switch (command.type) {
-        case 'click':
-          await clickAt(mouse, command.x, command.y, command.button, command.times);
-          break;
-        case 'key':
-          await pressCodes(command.codes);
-          break;
-        case 'string':
-          await typeText(command.text);
-          break;
-        case 'delay':
-          await sleep(command.ms);
-          break;
-      }
-
-      if (command.type !== 'delay') {
-        await sleep(30);
-      }
-    }
+    return await playCommands(macro, macros, new MouseReportAbsolute(), 0);
   } finally {
     store.set(isMacroPlayingAtom, false);
     store.set(isKeyboardEnableAtom, previousKeyboard);
   }
+}
+
+async function playCommands(
+  macro: Macro,
+  macros: Macro[],
+  mouse: MouseReportAbsolute,
+  depth: number
+): Promise<string | null> {
+  const parsed = parseScript(macro.script);
+  if (!parsed.ok) {
+    return `${macro.name}: line ${parsed.line}: ${parsed.error}`;
+  }
+
+  for (const command of parsed.commands) {
+    const error = await playCommand(command, macro, macros, mouse, depth);
+    if (error) {
+      return error;
+    }
+
+    if (command.type !== 'delay') {
+      await sleep(30);
+    }
+  }
 
   return null;
+}
+
+async function playCommand(
+  command: ScriptCommand,
+  macro: Macro,
+  macros: Macro[],
+  mouse: MouseReportAbsolute,
+  depth: number
+): Promise<string | null> {
+  switch (command.type) {
+    case 'click':
+      await clickAt(mouse, command.x, command.y, command.button, command.times);
+      return null;
+    case 'key':
+      await pressCodes(command.codes);
+      return null;
+    case 'string':
+      await typeText(command.text);
+      return null;
+    case 'delay':
+      await sleep(command.ms);
+      return null;
+    case 'run':
+      return playNestedMacro(command.name, macro, macros, mouse, depth);
+  }
+}
+
+async function playNestedMacro(
+  name: string,
+  parent: Macro,
+  macros: Macro[],
+  mouse: MouseReportAbsolute,
+  depth: number
+): Promise<string | null> {
+  if (depth >= 1) {
+    return `${parent.name}: nested RUN is limited to 1 level`;
+  }
+
+  const child = findMacro(macros, name);
+  if (!child) {
+    return `${parent.name}: macro not found: ${name}`;
+  }
+
+  return playCommands(child, macros, mouse, depth + 1);
+}
+
+function findMacro(macros: Macro[], name: string): Macro | undefined {
+  const needle = name.trim().toLowerCase();
+  return macros.find((macro) => macro.name.trim().toLowerCase() === needle);
 }
