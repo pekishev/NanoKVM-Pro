@@ -255,6 +255,17 @@ main() {
 
     # Added installation detection and user interaction
     if is_installed "$target_dir"; then
+        # GitHub Actions and other CI set CI=true; never prompt for TTY input there.
+        if [[ -n "${CI:-}" ]]; then
+            echo "Toolchain already installed, skipping download (CI)"
+            gen_toolchain_path "$target_dir"
+            gen_conan_profile "$target_dir"
+            if [[ ! -f "${target_dir}/aarch64-none-linux-gnu/libc/usr/include/opus/opus.h" ]]; then
+                echo "libopus missing in sysroot, installing..."
+                install_libopus "$target_dir"
+            fi
+            return 0
+        fi
         prompt_reinstall "$target_dir"
     else
         mkdir -p "$target_dir"

@@ -1,0 +1,83 @@
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'support/scripts/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'support/scripts/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
+      - name: Cache ARM toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: support/toolchains
+          key: ${{ runner.os }}-armv8-toolchains-${{ hashFiles('support/scripts/config.ini') }}
+
+      - name: Setup ARM toolchain
+        working-directory: support/scripts
+        run: ./toolchain_setup.sh
+
+      - name: Refresh toolchain.ini paths
+        run: |
+          NAME=$(python3 support/scripts/getconfig.py support/scripts/config.ini toolchain name)
+          CC_REL=$(python3 support/scripts/getconfig.py support/scripts/config.ini toolchain cc)
+          CXX_REL=$(python3 support/scripts/getconfig.py support/scripts/config.ini toolchain cxx)
+          LD_REL=$(python3 support/scripts/getconfig.py support/scripts/config.ini toolchain ld)
+          TARGET_DIR="${GITHUB_WORKSPACE}/support/toolchains/${NAME}"
+          mkdir -p "${GITHUB_WORKSPACE}/support/toolchains"
+          {
+            echo "[toolchain]"
+            echo "cc = ${TARGET_DIR}/${CC_REL}"
+            echo "cxx = ${TARGET_DIR}/${CXX_REL}"
+            echo "ld = ${TARGET_DIR}/${LD_REL}"
+          } > "${GITHUB_WORKSPACE}/support/toolchains/toolchain.ini"
+          test -x "${TARGET_DIR}/${CC_REL}"
+          cat "${GITHUB_WORKSPACE}/support/toolchains/toolchain.ini"
+
+      - name: Build server
+        working-directory: server
+        run: ./build.sh
+
+      - name: Inspect binary
+        working-directory: server
+        run: |
+          file NanoKVM-Server
+          ls -lh NanoKVM-Server
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: NanoKVM-Server
+          path: server/NanoKVM-Server
+          if-no-files-found: error
+          retention-days: 14
