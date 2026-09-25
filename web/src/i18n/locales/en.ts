@@ -527,11 +527,14 @@ const en = {
         cancelBtn: 'No'
       },
       update: {
-        title: 'Check for Updates',
+        title: 'Update',
         queryFailed: 'Get version failed',
         updateFailed: 'Update failed. Please retry.',
         isLatest: 'You already have the latest version.',
         available: 'An update is available. Are you sure you want to update now?',
+        uploadDesc: 'Upload a nanokvm-pro-*.tar.gz release archive. The device will restart after installation.',
+        chooseFile: 'Choose file',
+        invalidFile: 'Choose a .tar.gz release archive up to 256 MB.',
         updating: 'Update started. Please wait...',
         confirm: 'Confirm',
         upgrade_tip_nano:
@@ -544,8 +547,10 @@ const en = {
         previewTip:
           'Please be aware that preview releases may contain bugs or incomplete functionality!',
         download: 'Download',
+        upload: 'Upload',
         install: 'Install',
         changelog: 'Changelog',
+        forkReleases: 'Fork releases',
         restart: 'Restart'
       },
       account: {

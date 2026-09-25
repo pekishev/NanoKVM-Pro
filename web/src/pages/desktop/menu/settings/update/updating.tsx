@@ -5,7 +5,11 @@ import { IMessageEvent } from 'websocket';
 
 import { client } from '@/lib/websocket.ts';
 
-export const Updating = () => {
+type UpdatingProps = {
+  uploadProgress?: number;
+};
+
+export const Updating = ({ uploadProgress }: UpdatingProps) => {
   const { t } = useTranslation();
 
   const [step, setStep] = useState(0);
@@ -85,11 +89,14 @@ export const Updating = () => {
 
       <Steps
         current={step}
-        percent={progress}
+        percent={uploadProgress !== undefined && step === 0 ? uploadProgress : progress}
         status={status}
         items={[
           {
-            title: t('settings.update.download')
+            title:
+              uploadProgress !== undefined
+                ? t('settings.update.upload')
+                : t('settings.update.download')
           },
           {
             title: t('settings.update.install')

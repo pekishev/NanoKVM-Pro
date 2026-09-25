@@ -5,6 +5,10 @@ type GetVersionRsp struct {
 	Latest  string `json:"latest"`
 }
 
+type UploadReleaseRsp struct {
+	Version string `json:"version"`
+}
+
 type GetPreviewRsp struct {
 	Enabled bool `json:"enabled"`
 }

@@ -38,7 +38,6 @@ export const Settings = () => {
   const setSubmenuOpenCount = useSetAtom(submenuOpenCountAtom);
 
   const [isLocked, setIsLocked] = useState(false);
-
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
 
   const tabs = [
