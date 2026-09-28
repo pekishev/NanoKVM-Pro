@@ -26,6 +26,11 @@ var (
 func (s *Service) Update(c *gin.Context) {
 	var rsp proto.Response
 
+	if !isUpdateCheckEnabled() {
+		rsp.ErrRsp(c, -4, "update check is disabled")
+		return
+	}
+
 	updateMutex.Lock()
 	if isUpdating {
 		updateMutex.Unlock()
@@ -41,12 +46,27 @@ func (s *Service) Update(c *gin.Context) {
 		updateMutex.Unlock()
 	}()
 
-	if err := update(); err != nil {
+	choice := resolveUpdate(getCurrentVersion())
+	if choice.Source == "" {
+		rsp.ErrRsp(c, -3, "already up to date")
+		return
+	}
+
+	var err error
+	if choice.Source == sourceFork {
+		err = installFork(choice.Fork)
+	} else {
+		err = update()
+	}
+	if err != nil {
 		rsp.ErrRsp(c, -2, "failed to update service")
 		return
 	}
 
 	rsp.OkRsp(c)
+	if choice.Source == sourceFork {
+		go restartService()
+	}
 	log.Debugf("update service success")
 }
 
@@ -107,11 +127,12 @@ func download(url string, target string) (err error) {
 		}
 
 		var req *http.Request
-		req, err = http.NewRequest("GET", url, nil)
+		req, err = http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			log.Errorf("new request err: %s", err)
 			continue
 		}
+		req.Header.Set("User-Agent", updateUserAgent)
 
 		err = utils.DownloadWithProgress(req, target, progressHandler)
 		if err != nil {

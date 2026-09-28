@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,17 +28,76 @@ func (s *Service) GetVersion(c *gin.Context) {
 	var rsp proto.Response
 
 	currentVersion := getCurrentVersion()
-
-	latestVersion := currentVersion
-	if latest, err := getLatest(); err == nil {
-		latestVersion = latest.Version
+	if !isUpdateCheckEnabled() {
+		rsp.OkRspWithData(c, &proto.GetVersionRsp{
+			Current:  currentVersion,
+			Latest:   currentVersion,
+			Checking: false,
+		})
+		log.Debugf("update check is disabled, current version: %s", currentVersion)
+		return
 	}
 
+	choice := resolveUpdate(currentVersion)
+
 	rsp.OkRspWithData(c, &proto.GetVersionRsp{
-		Current: currentVersion,
-		Latest:  latestVersion,
+		Current:  currentVersion,
+		Latest:   choice.Version,
+		Source:   choice.Source,
+		Checking: true,
 	})
-	log.Debugf("current version: %s, latest version: %s", currentVersion, latestVersion)
+	log.Debugf("current version: %s, latest version: %s, source: %s", currentVersion, choice.Version, choice.Source)
+}
+
+type updateChoice struct {
+	Version string
+	Source  string
+	Fork    *ForkRelease
+}
+
+func resolveUpdate(current string) updateChoice {
+	official, fork := fetchCandidates()
+	forkVersion := ""
+	if fork != nil {
+		forkVersion = fork.Version
+	}
+
+	latest, source := selectUpdate(current, official, forkVersion)
+	choice := updateChoice{Version: latest, Source: source}
+	if source == sourceFork {
+		choice.Fork = fork
+	}
+
+	return choice
+}
+
+func fetchCandidates() (string, *ForkRelease) {
+	var (
+		wg       sync.WaitGroup
+		official string
+		fork     *ForkRelease
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		latest, err := getLatest()
+		if err != nil {
+			return
+		}
+		official = latest.Version
+	}()
+	go func() {
+		defer wg.Done()
+		release, err := getForkLatest()
+		if err != nil {
+			return
+		}
+		fork = release
+	}()
+	wg.Wait()
+
+	return official, fork
 }
 
 func getCurrentVersion() string {
@@ -64,7 +124,14 @@ func getLatest() (*Latest, error) {
 	}
 
 	url := fmt.Sprintf("%s/nanokvm_pro_latest.json?now=%d", baseURL, time.Now().Unix())
-	resp, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Errorf("failed to get latest version: %v", err)
+		return nil, err
+	}
+	req.Header.Set("User-Agent", updateUserAgent)
+
+	resp, err := updateHTTP.Do(req)
 	if err != nil {
 		log.Errorf("failed to get latest version: %v", err)
 		return nil, err

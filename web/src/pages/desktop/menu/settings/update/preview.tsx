@@ -7,9 +7,10 @@ import * as api from '@/api/application.ts';
 
 type PreviewProps = {
   checkForUpdates: () => void;
+  checksEnabled?: boolean;
 };
 
-export const Preview = ({ checkForUpdates }: PreviewProps) => {
+export const Preview = ({ checkForUpdates, checksEnabled = true }: PreviewProps) => {
   const { t } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +53,9 @@ export const Preview = ({ checkForUpdates }: PreviewProps) => {
         }
 
         setIsEnabled(enable);
-        checkForUpdates();
+        if (checksEnabled) {
+          checkForUpdates();
+        }
       })
       .finally(() => {
         setIsLoading(false);

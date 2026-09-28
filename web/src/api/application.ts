@@ -45,3 +45,7 @@ export function setPreviewUpdates(enable: boolean) {
 export function getPreviewUpdates() {
   return http.get('/api/application/preview');
 }
+
+export function setUpdateCheck(enable: boolean) {
+  return http.post('/api/application/check', { enable });
+}

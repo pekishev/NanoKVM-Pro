@@ -1,10 +1,10 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { LoadingOutlined, RocketOutlined, SmileOutlined, UploadOutlined } from '@ant-design/icons';
-import { Button, Divider, Result, Spin } from 'antd';
+import { Button, Divider, Result, Spin, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
-import semver from 'semver';
 
 import * as api from '@/api/application.ts';
+import { isUpdateAvailable } from '@/lib/update.ts';
 
 import { Preview } from './preview.tsx';
 import { Updating } from './updating.tsx';
@@ -29,6 +29,8 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
   const [releaseFile, setReleaseFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined);
   const [fileError, setFileError] = useState('');
+  const [checking, setChecking] = useState(true);
+  const [savingCheck, setSavingCheck] = useState(false);
 
   useEffect(() => {
     checkForUpdates();
@@ -50,15 +52,57 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
         setCurrentVersion(rsp.data.current);
         setLatestVersion(rsp.data.latest);
 
-        const isLatest = semver.gt(rsp.data.latest, rsp.data.current);
-        if (isLatest) {
-          setTipMsg(t('settings.update.available'));
+        const checksOn = rsp.data.checking !== false;
+        setChecking(checksOn);
+        if (!checksOn) {
+          setTipMsg(t('settings.update.checksDisabled'));
+          setStatus('latest');
+          return;
         }
-        setStatus(!isLatest ? 'latest' : 'outdated');
+
+        const outdated = isUpdateAvailable(rsp.data);
+        if (outdated) {
+          setTipMsg(
+            rsp.data.source === 'fork'
+              ? t('settings.update.forkAvailable')
+              : t('settings.update.available')
+          );
+        } else {
+          setTipMsg('');
+        }
+        setStatus(outdated ? 'outdated' : 'latest');
       })
       .catch(() => {
         setStatus('failed');
         setErrMsg(t('settings.update.queryFailed'));
+      });
+  }
+
+  function setUpdateCheck(enable: boolean) {
+    if (savingCheck || status === 'updating') {
+      return;
+    }
+
+    setSavingCheck(true);
+    api
+      .setUpdateCheck(enable)
+      .then((rsp) => {
+        if (rsp.code !== 0) {
+          return;
+        }
+
+        setChecking(enable);
+        if (enable) {
+          checkForUpdates();
+          return;
+        }
+
+        setLatestVersion(currentVersion);
+        setTipMsg(t('settings.update.checksDisabled'));
+        setStatus('latest');
+      })
+      .finally(() => {
+        setSavingCheck(false);
       });
   }
 
@@ -142,7 +186,21 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
       <div className="text-base font-bold">{t('settings.update.title')}</div>
       <Divider className="opacity-50" />
 
-      <Preview checkForUpdates={checkForUpdates} />
+      <div className="flex items-center justify-between py-3">
+        <div className="flex flex-col">
+          <span>{t('settings.update.check')}</span>
+          <span className="text-xs text-neutral-500">{t('settings.update.checkDesc')}</span>
+        </div>
+        <Switch
+          checked={checking}
+          loading={savingCheck}
+          disabled={status === 'updating'}
+          onChange={setUpdateCheck}
+        />
+      </div>
+      <Divider className="opacity-50" />
+
+      <Preview checkForUpdates={checkForUpdates} checksEnabled={checking} />
       <Divider className="opacity-50" />
 
       <div className="flex min-h-[400px] flex-col justify-between">
@@ -159,7 +217,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
             status="success"
             icon={<SmileOutlined />}
             title={currentVersion}
-            subTitle={t('settings.update.isLatest')}
+            subTitle={tipMsg || t('settings.update.isLatest')}
             extra={[
               <Button key="confirm" onClick={checkForUpdates}>
                 {t('settings.update.title')}

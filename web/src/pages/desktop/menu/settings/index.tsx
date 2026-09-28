@@ -12,10 +12,10 @@ import {
   UserRoundIcon
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import semver from 'semver';
 
 import * as api from '@/api/application.ts';
 import * as ls from '@/lib/localstorage.ts';
+import { isUpdateAvailable } from '@/lib/update.ts';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { isSettingsOpenAtom, settingTabAtom, submenuOpenCountAtom } from '@/jotai/settings.ts';
 import { Tailscale as TailscaleIcon } from '@/components/icons/tailscale';
@@ -71,7 +71,7 @@ export const Settings = () => {
         return;
       }
 
-      if (semver.gt(rsp.data.latest, rsp.data.current)) {
+      if (isUpdateAvailable(rsp.data)) {
         setIsUpdateAvailable(true);
       }
     });
