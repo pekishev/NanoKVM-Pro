@@ -65,16 +65,12 @@ async function clickAt(
 async function pressCodes(codes: string[]) {
   const keyboard = new KeyboardReport();
 
-  let report: Uint8Array | null = null;
   for (const code of codes) {
-    report = keyboard.keyDown(code);
+    sendKeyboard(keyboard.keyDown(code));
+    await sleep(30);
   }
 
-  if (report) {
-    sendKeyboard(report);
-    await sleep(50);
-  }
-
+  await sleep(50);
   sendKeyboard(keyboard.reset());
 }
 

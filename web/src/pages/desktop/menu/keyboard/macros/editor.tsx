@@ -8,6 +8,7 @@ import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { ScrollArea } from '@/components/ui/scroll-area.tsx';
 
 import { CoordinatePicker } from './picker.tsx';
+import { applyRecordEvent, createRecordState } from './record.ts';
 import { parseScript } from './script.ts';
 import type { Macro } from './types.ts';
 
@@ -33,6 +34,10 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
   const [pickingKind, setPickingKind] = useState<InsertKind | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [parseError, setParseError] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordStatus, setRecordStatus] = useState('');
+  const recordStateRef = useRef(createRecordState());
+  const fullscreenRequestedRef = useRef(false);
 
   const isPicking = pickingKind !== null;
   const parsed = parseScript(draft.script);
@@ -44,15 +49,65 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
     setIsPicking(isPicking);
   }, [isModalOpen, isPicking, setIsEditing, setIsKeyboardEnable, setIsPicking]);
 
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const result = applyRecordEvent(recordStateRef.current, 'keydown', event.code, event.repeat);
+      if (!result) return;
+      if ('line' in result) {
+        appendRecordedLine(result.line);
+        setRecordStatus(result.line);
+        return;
+      }
+      setRecordStatus(t('keyboard.macro.recordUnknown'));
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const result = applyRecordEvent(recordStateRef.current, 'keyup', event.code, false);
+      if (result && 'line' in result) {
+        appendRecordedLine(result.line);
+        setRecordStatus(result.line);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+  }, [isRecording, t]);
+
   function openModal(macro?: Macro) {
+    stopRecording();
     setDraft(macro ? { ...macro } : emptyMacro());
     setPickingKind(null);
     setParseError('');
     setIsModalOpen(true);
   }
 
+  function stopRecording() {
+    setIsRecording(false);
+    setRecordStatus('');
+    recordStateRef.current = createRecordState();
+
+    const keyboardApi = (navigator as Navigator & { keyboard?: { unlock?: () => void } }).keyboard;
+    keyboardApi?.unlock?.();
+
+    if (fullscreenRequestedRef.current && document.fullscreenElement) {
+      fullscreenRequestedRef.current = false;
+      document.exitFullscreen().catch(() => undefined);
+    }
+  }
+
   function closeModal() {
     if (isPicking) return;
+    stopRecording();
     setDraft(emptyMacro());
     setParseError('');
     setIsModalOpen(false);
@@ -79,7 +134,40 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
     });
   }
 
+  function appendRecordedLine(line: string) {
+    setDraft((prev) => {
+      const script = prev.script;
+      const prefix = script && !script.endsWith('\n') ? '\n' : '';
+      return { ...prev, script: `${script}${prefix}${line}\n` };
+    });
+    setParseError('');
+  }
+
+  function toggleRecording() {
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+
+    recordStateRef.current = createRecordState();
+    setRecordStatus('');
+    setIsRecording(true);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
+
+  async function enableSystemKeys() {
+    if (!document.fullscreenElement) {
+      fullscreenRequestedRef.current = true;
+      await document.documentElement.requestFullscreen();
+    }
+    const keyboardApi = (navigator as Navigator & { keyboard?: { lock?: () => Promise<void> } }).keyboard;
+    await keyboardApi?.lock?.();
+  }
+
   function startPicking(kind: InsertKind) {
+    stopRecording();
     setPickingKind(kind);
     setIsModalOpen(false);
   }
@@ -117,6 +205,7 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
         name: draft.name.trim(),
         script: draft.script.replace(/\r\n/g, '\n')
       });
+      stopRecording();
       setDraft(emptyMacro());
       setParseError('');
     } catch (err) {
@@ -156,6 +245,9 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
           </pre>
 
           <div className="flex flex-wrap gap-2">
+            <Button size="small" type={isRecording ? 'primary' : 'default'} danger={isRecording} onClick={toggleRecording}>
+              {isRecording ? t('keyboard.macro.stopRecord') : t('keyboard.macro.record')}
+            </Button>
             <Button size="small" onClick={() => insertSnippet('STRING ', false)}>
               STRING
             </Button>
@@ -187,6 +279,15 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
               MOVE
             </Button>
           </div>
+
+          {isRecording && (
+            <div className="text-xs leading-5 text-neutral-400">
+              <div>{recordStatus || t('keyboard.macro.recording')}</div>
+              <button type="button" className="text-blue-400" onClick={() => enableSystemKeys()}>
+                {t('keyboard.macro.recordFullscreen')}
+              </button>
+            </div>
+          )}
 
           <textarea
             ref={textareaRef}
