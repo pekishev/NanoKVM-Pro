@@ -19,7 +19,7 @@ interface EditorProps {
   setIsPicking: (isPicking: boolean) => void;
 }
 
-type InsertKind = 'CLICK' | 'DBLCLICK';
+type InsertKind = 'CLICK' | 'DBLCLICK' | 'MOVE';
 
 const emptyMacro = (): Macro => ({ name: '', script: '' });
 
@@ -165,8 +165,11 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
             <Button size="small" onClick={() => insertSnippet('TAB')}>
               TAB
             </Button>
-            <Button size="small" onClick={() => insertSnippet('CTRL-ALT DELETE')}>
-              CTRL-ALT-DEL
+            <Button size="small" onClick={() => insertSnippet('WIN+SHIFT+S')}>
+              WIN+SHIFT+S
+            </Button>
+            <Button size="small" onClick={() => insertSnippet('CTRL+ALT+DELETE')}>
+              CTRL+ALT+DEL
             </Button>
             <Button size="small" onClick={() => insertSnippet('DELAY 200')}>
               DELAY
@@ -179,6 +182,9 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
             </Button>
             <Button size="small" onClick={() => startPicking('DBLCLICK')}>
               DBLCLICK
+            </Button>
+            <Button size="small" onClick={() => startPicking('MOVE')}>
+              MOVE
             </Button>
           </div>
 

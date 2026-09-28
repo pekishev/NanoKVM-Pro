@@ -105,6 +105,10 @@ function parseLine(raw: string): ScriptCommand | string {
     return { type: 'string', text: name === 'STRINGLN' ? `${text}\n` : text };
   }
 
+  if (name === 'MOVE') {
+    return parseMove(rest);
+  }
+
   if (name === 'CLICK' || name === 'DBLCLICK' || name === 'RIGHTCLICK' || name === 'MIDDLECLICK') {
     return parseClick(name, rest);
   }
@@ -123,17 +127,24 @@ function parseLine(raw: string): ScriptCommand | string {
   return parseKeyLine(raw);
 }
 
-function parseClick(name: string, rest: string): ScriptCommand | string {
-  const parts = rest.split(/\s+/).filter(Boolean);
-  if (parts.length < 2 || parts.length > 3) {
-    return `${name} needs X Y [LEFT|RIGHT|MIDDLE]`;
+function parseMove(rest: string): ScriptCommand | string {
+  const point = parsePoint('MOVE', rest, 2);
+  if (typeof point === 'string') {
+    return point;
   }
 
-  const x = Number(parts[0]);
-  const y = Number(parts[1]);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 100 || y < 0 || y > 100) {
-    return 'coordinates must be 0..100 percent';
+  return { type: 'move', x: point.x, y: point.y };
+}
+
+function parseClick(name: string, rest: string): ScriptCommand | string {
+  const point = parsePoint(name, rest, 3);
+  if (typeof point === 'string') {
+    return point === 'coordinates must be 0..100 percent'
+      ? point
+      : `${name} needs X Y [LEFT|RIGHT|MIDDLE]`;
   }
+
+  const { x, y, parts } = point;
 
   let button: MouseButtonName = 'left';
   if (name === 'RIGHTCLICK') {
@@ -159,9 +170,28 @@ function parseClick(name: string, rest: string): ScriptCommand | string {
   };
 }
 
+function parsePoint(
+  name: string,
+  rest: string,
+  maxParts: number
+): { x: number; y: number; parts: string[] } | string {
+  const parts = rest.split(/\s+/).filter(Boolean);
+  if (parts.length < 2 || parts.length > maxParts) {
+    return `${name} needs X Y`;
+  }
+
+  const x = Number(parts[0]);
+  const y = Number(parts[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 100 || y < 0 || y > 100) {
+    return 'coordinates must be 0..100 percent';
+  }
+
+  return { x, y, parts };
+}
+
 function parseKeyLine(raw: string): ScriptCommand | string {
   const tokens = raw
-    .split(/[\s-]+/)
+    .split(/[\s+-]+/)
     .map((token) => token.trim())
     .filter(Boolean);
 

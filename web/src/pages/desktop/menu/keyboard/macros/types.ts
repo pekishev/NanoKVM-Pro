@@ -4,6 +4,7 @@ export type ScriptCommand =
   | { type: 'delay'; ms: number }
   | { type: 'string'; text: string }
   | { type: 'key'; codes: string[] }
+  | { type: 'move'; x: number; y: number }
   | { type: 'click'; x: number; y: number; button: MouseButtonName; times: number }
   | { type: 'run'; name: string };
 

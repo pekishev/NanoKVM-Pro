@@ -29,6 +29,11 @@ function sendMouse(report: Uint8Array) {
   client.send(new Uint8Array([MessageEvent.Mouse, ...report]));
 }
 
+async function moveTo(mouse: MouseReportAbsolute, x: number, y: number) {
+  sendMouse(mouse.buildReport(percentToHid(x), percentToHid(y), 0));
+  await sleep(30);
+}
+
 async function clickAt(
   mouse: MouseReportAbsolute,
   x: number,
@@ -60,12 +65,16 @@ async function clickAt(
 async function pressCodes(codes: string[]) {
   const keyboard = new KeyboardReport();
 
+  let report: Uint8Array | null = null;
   for (const code of codes) {
-    sendKeyboard(keyboard.keyDown(code));
-    await sleep(20);
+    report = keyboard.keyDown(code);
   }
 
-  await sleep(50);
+  if (report) {
+    sendKeyboard(report);
+    await sleep(50);
+  }
+
   sendKeyboard(keyboard.reset());
 }
 
@@ -128,6 +137,9 @@ async function playCommand(
   depth: number
 ): Promise<string | null> {
   switch (command.type) {
+    case 'move':
+      await moveTo(mouse, command.x, command.y);
+      return null;
     case 'click':
       await clickAt(mouse, command.x, command.y, command.button, command.times);
       return null;
