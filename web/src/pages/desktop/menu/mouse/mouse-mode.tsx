@@ -14,6 +14,7 @@ export const MouseMode = () => {
 
   const mouseModes = [
     { name: t('mouse.absolute'), value: 'absolute' },
+    { name: t('mouse.absoluteSimple'), value: 'absolute-simple' },
     { name: t('mouse.relative'), value: 'relative' }
   ];
 

@@ -180,6 +180,7 @@ const en = {
       hide: 'Hide cursor',
       mode: 'Mouse mode',
       absolute: 'Absolute mode',
+      absoluteSimple: 'Absolute Simple',
       relative: 'Relative mode',
       direction: 'Wheel direction',
       scrollUp: 'Scroll up',

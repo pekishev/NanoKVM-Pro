@@ -4,7 +4,12 @@ import { useMediaQuery } from 'react-responsive';
 
 import { MouseReportAbsolute } from '@/lib/mouse.ts';
 import { client, MessageEvent } from '@/lib/websocket.ts';
-import { scrollDirectionAtom, scrollIntervalAtom, isMacroPlayingAtom } from '@/jotai/mouse.ts';
+import {
+  isMacroPlayingAtom,
+  mouseModeAtom,
+  scrollDirectionAtom,
+  scrollIntervalAtom
+} from '@/jotai/mouse.ts';
 
 import { MouseAbsoluteEvent } from './types.ts';
 
@@ -19,6 +24,8 @@ enum MouseButton {
 export const Absolute = () => {
   const isBigScreen = useMediaQuery({ minWidth: 650 });
 
+  const mouseMode = useAtomValue(mouseModeAtom);
+  const isSimple = mouseMode === 'absolute-simple';
   const scrollDirection = useAtomValue(scrollDirectionAtom);
   const scrollInterval = useAtomValue(scrollIntervalAtom);
 
@@ -35,6 +42,7 @@ export const Absolute = () => {
   const isDraggingRef = useRef(false);
   const pressedButtonRef = useRef<MouseButton | null>(null);
   const touchStartPosRef = useRef({ x: 0, y: 0 });
+  const ignoreMouseUntilRef = useRef(0);
 
   const TAP_THRESHOLD = 8;
   const DRAG_THRESHOLD = 10;
@@ -51,27 +59,82 @@ export const Absolute = () => {
     screen.addEventListener('click', disableEvent);
     screen.addEventListener('contextmenu', disableEvent);
 
-    if (isBigScreen) {
+    const gestureSurface = screen.parentElement ?? screen;
+    const previousOverflow = document.documentElement.style.overflow;
+    const view = { scale: 1, x: 0, y: 0 };
+    const twoFinger = {
+      mode: 'pending' as 'pending' | 'pinch' | 'scroll',
+      startDist: 0,
+      startMidX: 0,
+      startMidY: 0,
+      lastMidY: 0,
+      startScale: 1,
+      startX: 0,
+      startY: 0,
+      layoutLeft: 0,
+      layoutTop: 0
+    };
+    const pan = { active: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+    let touchOnScreen = false;
+
+    if (isSimple) {
+      gestureSurface.addEventListener('touchstart', handleSimpleTouchStart, { passive: false });
+      gestureSurface.addEventListener('touchmove', handleSimpleTouchMove, { passive: false });
+      gestureSurface.addEventListener('touchend', handleSimpleTouchEnd, { passive: false });
+      gestureSurface.addEventListener('touchcancel', handleSimpleTouchCancel, { passive: false });
+      gestureSurface.style.touchAction = 'none';
+      document.documentElement.style.overflow = 'hidden';
+    } else if (isBigScreen) {
       screen.addEventListener('touchstart', handleTouchStart);
       screen.addEventListener('touchmove', handleTouchMove);
       screen.addEventListener('touchend', handleTouchEnd);
       screen.addEventListener('touchcancel', handleTouchCancel);
     }
 
+    function firesTouchEvents(event: Event) {
+      const capabilities = (
+        event as Event & { sourceCapabilities?: { firesTouchEvents?: boolean } }
+      ).sourceCapabilities;
+      return Boolean(capabilities?.firesTouchEvents);
+    }
+
+    function shouldIgnoreMouse(e: MouseEvent) {
+      if (!isSimple) {
+        return false;
+      }
+      if (Date.now() < ignoreMouseUntilRef.current) {
+        return true;
+      }
+      return firesTouchEvents(e);
+    }
+
+    function holdOffSyntheticMouse() {
+      ignoreMouseUntilRef.current = Date.now() + 700;
+    }
+
     // Mouse down event
     function handleMouseDown(e: MouseEvent) {
+      if (shouldIgnoreMouse(e)) {
+        return;
+      }
       disableEvent(e);
       handleMouseEvent({ type: 'mousedown', button: e.button });
     }
 
     // Mouse up event
     function handleMouseUp(e: MouseEvent) {
+      if (shouldIgnoreMouse(e)) {
+        return;
+      }
       disableEvent(e);
       handleMouseEvent({ type: 'mouseup', button: e.button });
     }
 
     // Mouse move event
     function handleMouseMove(e: MouseEvent) {
+      if (shouldIgnoreMouse(e)) {
+        return;
+      }
       disableEvent(e);
       const { x, y } = getCoordinate(e);
       handleMouseEvent({ type: 'move', x, y });
@@ -79,6 +142,9 @@ export const Absolute = () => {
 
     // Mouse wheel event
     function handleWheel(e: WheelEvent) {
+      if (shouldIgnoreMouse(e)) {
+        return;
+      }
       disableEvent(e);
 
       if (Math.floor(e.deltaY) === 0) {
@@ -93,6 +159,298 @@ export const Absolute = () => {
       const deltaY = (e.deltaY > 0 ? 1 : -1) * scrollDirection;
       handleMouseEvent({ type: 'wheel', deltaY });
       lastScrollTimeRef.current = currentTime;
+    }
+
+    const MIN_SCALE = 1;
+    const MAX_SCALE = 5;
+    const PINCH_ARM = 18;
+    const SCROLL_ARM = 28;
+
+    function fingerDistance(touches: TouchList) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+
+    function midpoint(touches: TouchList) {
+      return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+      };
+    }
+
+    function clearLongPress() {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    function applyView() {
+      if (view.scale <= MIN_SCALE) {
+        view.scale = MIN_SCALE;
+        view.x = 0;
+        view.y = 0;
+        gestureSurface.style.transform = '';
+        gestureSurface.style.transformOrigin = '';
+        return;
+      }
+
+      gestureSurface.style.transformOrigin = '0 0';
+      gestureSurface.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    }
+
+    function isOverScreen(clientX: number, clientY: number) {
+      const el = document.elementFromPoint(clientX, clientY);
+      return !!el && (el === screen || screen.contains(el));
+    }
+
+    function beginTwoFinger(touches: TouchList) {
+      const rect = gestureSurface.getBoundingClientRect();
+      const mid = midpoint(touches);
+      twoFinger.layoutLeft = rect.left - view.x;
+      twoFinger.layoutTop = rect.top - view.y;
+      twoFinger.startDist = fingerDistance(touches);
+      twoFinger.startMidX = mid.x;
+      twoFinger.startMidY = mid.y;
+      twoFinger.lastMidY = mid.y;
+      twoFinger.startScale = view.scale;
+      twoFinger.startX = view.x;
+      twoFinger.startY = view.y;
+      twoFinger.mode = 'pending';
+    }
+
+    function updatePinch(touches: TouchList) {
+      const dist = fingerDistance(touches);
+      const mid = midpoint(touches);
+      if (twoFinger.startDist <= 0) {
+        return;
+      }
+
+      let scale = twoFinger.startScale * (dist / twoFinger.startDist);
+      scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+
+      if (scale <= MIN_SCALE) {
+        view.scale = MIN_SCALE;
+        view.x = 0;
+        view.y = 0;
+        applyView();
+        return;
+      }
+
+      const contentX =
+        (twoFinger.startMidX - twoFinger.layoutLeft - twoFinger.startX) / twoFinger.startScale;
+      const contentY =
+        (twoFinger.startMidY - twoFinger.layoutTop - twoFinger.startY) / twoFinger.startScale;
+      view.scale = scale;
+      view.x = mid.x - twoFinger.layoutLeft - contentX * scale;
+      view.y = mid.y - twoFinger.layoutTop - contentY * scale;
+      applyView();
+    }
+
+    function sendSimpleWheel(deltaClientY: number) {
+      if (deltaClientY === 0) {
+        return;
+      }
+
+      const currentTime = Date.now();
+      if (currentTime - lastScrollTimeRef.current < scrollInterval) {
+        return;
+      }
+
+      const deltaY = (deltaClientY > 0 ? 1 : -1) * scrollDirection;
+      handleMouseEvent({ type: 'wheel', deltaY });
+      lastScrollTimeRef.current = currentTime;
+    }
+
+    // Absolute Simple keeps browser zoom out of the way: pinch and pan are our own
+    // transform, so they still work when fullscreen locks the visual viewport.
+    function handleSimpleTouchStart(e: TouchEvent) {
+      if (e.touches.length === 0) {
+        return;
+      }
+
+      holdOffSyntheticMouse();
+      clearLongPress();
+
+      if (pressedButtonRef.current !== null) {
+        handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
+        pressedButtonRef.current = null;
+      }
+
+      const touch = e.touches[0];
+      touchStartTimeRef.current = Date.now();
+      isLongPressRef.current = false;
+      hasMoveRef.current = false;
+      isDraggingRef.current = false;
+      pan.active = false;
+      touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+
+      if (e.touches.length > 1) {
+        e.preventDefault();
+        hasMoveRef.current = true;
+        touchOnScreen = false;
+        beginTwoFinger(e.touches);
+        return;
+      }
+
+      twoFinger.mode = 'pending';
+      twoFinger.startDist = 0;
+      touchOnScreen = isOverScreen(touch.clientX, touch.clientY);
+      if (!touchOnScreen) {
+        return;
+      }
+
+      longPressTimerRef.current = setTimeout(() => {
+        isLongPressRef.current = true;
+        pressedButtonRef.current = MouseButton.Right;
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+
+        const { x, y } = getCoordinate({
+          clientX: touchStartPosRef.current.x,
+          clientY: touchStartPosRef.current.y
+        });
+        handleMouseEvent({ type: 'move', x, y });
+        handleMouseEvent({ type: 'mousedown', button: MouseButton.Right });
+      }, 800);
+    }
+
+    function handleSimpleTouchMove(e: TouchEvent) {
+      if (e.touches.length === 0) {
+        return;
+      }
+
+      holdOffSyntheticMouse();
+
+      if (e.touches.length > 1) {
+        e.preventDefault();
+        clearLongPress();
+        hasMoveRef.current = true;
+        pan.active = false;
+
+        if (twoFinger.startDist <= 0) {
+          beginTwoFinger(e.touches);
+          return;
+        }
+
+        const distance = fingerDistance(e.touches);
+        const mid = midpoint(e.touches);
+        const distDelta = Math.abs(distance - twoFinger.startDist);
+        const scrollDelta = Math.abs(mid.y - twoFinger.startMidY);
+
+        if (twoFinger.mode === 'pending') {
+          if (distDelta > PINCH_ARM && distDelta >= scrollDelta) {
+            twoFinger.mode = 'pinch';
+          } else if (scrollDelta > SCROLL_ARM && scrollDelta > distDelta * 1.5) {
+            twoFinger.mode = 'scroll';
+          } else {
+            return;
+          }
+        }
+
+        if (twoFinger.mode === 'pinch') {
+          updatePinch(e.touches);
+          return;
+        }
+
+        sendSimpleWheel(mid.y - twoFinger.lastMidY);
+        twoFinger.lastMidY = mid.y;
+        return;
+      }
+
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStartPosRef.current.x;
+      const deltaY = touch.clientY - touchStartPosRef.current.y;
+      if (Math.hypot(deltaX, deltaY) <= TAP_THRESHOLD) {
+        return;
+      }
+
+      hasMoveRef.current = true;
+      clearLongPress();
+
+      if (view.scale <= MIN_SCALE) {
+        return;
+      }
+
+      e.preventDefault();
+      if (!pan.active) {
+        pan.active = true;
+        pan.startX = touch.clientX;
+        pan.startY = touch.clientY;
+        pan.originX = view.x;
+        pan.originY = view.y;
+      }
+
+      view.x = pan.originX + (touch.clientX - pan.startX);
+      view.y = pan.originY + (touch.clientY - pan.startY);
+      applyView();
+    }
+
+    function handleSimpleTouchEnd(e: TouchEvent) {
+      holdOffSyntheticMouse();
+      clearLongPress();
+
+      if (e.touches.length > 0) {
+        hasMoveRef.current = true;
+        pan.active = false;
+        if (pressedButtonRef.current !== null) {
+          handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
+          pressedButtonRef.current = null;
+        }
+        if (e.touches.length === 1) {
+          twoFinger.startDist = 0;
+          twoFinger.mode = 'pending';
+        }
+        return;
+      }
+
+      const touch = e.changedTouches[0];
+      if (
+        touch &&
+        touchOnScreen &&
+        !hasMoveRef.current &&
+        !isLongPressRef.current &&
+        twoFinger.mode !== 'pinch' &&
+        twoFinger.mode !== 'scroll'
+      ) {
+        const { x, y } = getCoordinate(touch);
+        handleMouseEvent({ type: 'move', x, y });
+        handleMouseEvent({ type: 'mousedown', button: MouseButton.Left });
+        setTimeout(() => {
+          handleMouseEvent({ type: 'mouseup', button: MouseButton.Left });
+        }, 50);
+      } else if (pressedButtonRef.current !== null) {
+        handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
+      }
+
+      isLongPressRef.current = false;
+      hasMoveRef.current = false;
+      isDraggingRef.current = false;
+      pressedButtonRef.current = null;
+      pan.active = false;
+      touchOnScreen = false;
+      twoFinger.mode = 'pending';
+      twoFinger.startDist = 0;
+    }
+
+    function handleSimpleTouchCancel() {
+      holdOffSyntheticMouse();
+      clearLongPress();
+
+      if (pressedButtonRef.current !== null) {
+        handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
+      }
+
+      isLongPressRef.current = false;
+      hasMoveRef.current = false;
+      isDraggingRef.current = false;
+      pressedButtonRef.current = null;
+      pan.active = false;
+      touchOnScreen = false;
+      twoFinger.mode = 'pending';
+      twoFinger.startDist = 0;
     }
 
     // Mouse touch start event
@@ -296,12 +654,20 @@ export const Absolute = () => {
       screen.removeEventListener('touchmove', handleTouchMove);
       screen.removeEventListener('touchend', handleTouchEnd);
       screen.removeEventListener('touchcancel', handleTouchCancel);
+      gestureSurface.removeEventListener('touchstart', handleSimpleTouchStart);
+      gestureSurface.removeEventListener('touchmove', handleSimpleTouchMove);
+      gestureSurface.removeEventListener('touchend', handleSimpleTouchEnd);
+      gestureSurface.removeEventListener('touchcancel', handleSimpleTouchCancel);
+      gestureSurface.style.transform = '';
+      gestureSurface.style.transformOrigin = '';
+      gestureSurface.style.touchAction = '';
+      document.documentElement.style.overflow = previousOverflow;
 
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
       }
     };
-  }, [isBigScreen, scrollDirection, scrollInterval]);
+  }, [isBigScreen, isSimple, scrollDirection, scrollInterval]);
 
   // Mouse event handler
   function handleMouseEvent(event: MouseAbsoluteEvent) {
