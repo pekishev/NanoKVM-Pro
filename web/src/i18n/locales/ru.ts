@@ -107,6 +107,8 @@ const ru = {
       ctrlaltdel: 'Ctrl+Alt+Del',
       dropdownEnglish: 'Английский',
       dropdownRussian: 'Русский',
+      altShiftTip: 'Переключить язык ввода',
+      enterTip: 'Нажать Enter',
       macro: {
         title: 'Макросы',
         custom: 'Настроить',

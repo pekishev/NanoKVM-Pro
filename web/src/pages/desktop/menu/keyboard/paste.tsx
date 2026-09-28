@@ -1,5 +1,5 @@
 import { ChangeEvent, useRef, useState } from 'react';
-import { Button, Input, Modal, Select, type InputRef } from 'antd';
+import { Button, Input, Modal, Select, Tooltip, type InputRef } from 'antd';
 import clsx from 'clsx';
 import { useSetAtom } from 'jotai';
 import { ClipboardIcon } from 'lucide-react';
@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import { paste } from '@/api/hid';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
+import { KeyboardReport } from '@/lib/keyboard.ts';
+import { client, MessageEvent } from '@/lib/websocket.ts';
 
 const { TextArea } = Input;
 
@@ -62,6 +64,26 @@ function isValidForLanguage(value: string, lang: string): boolean {
   return true;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sendKeyboard(report: Uint8Array) {
+  client.send(new Uint8Array([MessageEvent.Keyboard, ...report]));
+}
+
+async function pressKeys(codes: string[], holdMs: number) {
+  const keyboard = new KeyboardReport();
+
+  for (const code of codes) {
+    sendKeyboard(keyboard.keyDown(code));
+    await sleep(30);
+  }
+
+  await sleep(holdMs);
+  sendKeyboard(keyboard.reset());
+}
+
 export const Paste = () => {
   const { t } = useTranslation();
   const setIsKeyboardEnable = useSetAtom(isKeyboardEnableAtom);
@@ -71,9 +93,11 @@ export const Paste = () => {
   const [language, setLanguage] = useState('en');
   const [status, setStatus] = useState<'' | 'error'>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sendingKey, setSendingKey] = useState<'' | 'alt' | 'enter'>('');
   const [errMsg, setErrMsg] = useState('');
 
   const inputRef = useRef<InputRef>(null);
+  const sendingRef = useRef(false);
 
   function onChange(e: ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
@@ -107,6 +131,18 @@ export const Paste = () => {
       });
   }
 
+  async function sendKeys(kind: 'alt' | 'enter', codes: string[], holdMs: number) {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setSendingKey(kind);
+    try {
+      await pressKeys(codes, holdMs);
+    } finally {
+      sendingRef.current = false;
+      setSendingKey('');
+    }
+  }
+
   function afterOpenChange(open: boolean) {
     if (open) {
       inputRef.current?.focus();
@@ -134,15 +170,39 @@ export const Paste = () => {
         onCancel={() => setIsModalOpen(false)}
         afterOpenChange={afterOpenChange}
       >
-        <div className="flex items-center gap-2 pb-2">
-          <span className="text-sm text-neutral-600">{t('keyboard.virtual')}:</span>
-          <Select
-            size="small"
-            style={{ minWidth: 120 }}
-            value={language}
-            options={languages.map((l) => ({ value: l.value, label: t(l.labelKey) }))}
-            onChange={onLanguageChange}
-          />
+        <div className="flex items-center justify-between gap-2 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-neutral-600">{t('keyboard.virtual')}:</span>
+            <Select
+              size="small"
+              style={{ minWidth: 120 }}
+              value={language}
+              options={languages.map((l) => ({ value: l.value, label: t(l.labelKey) }))}
+              onChange={onLanguageChange}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Tooltip title={t('keyboard.altShiftTip')}>
+              <Button
+                size="small"
+                loading={sendingKey === 'alt'}
+                disabled={sendingKey === 'enter'}
+                onClick={() => sendKeys('alt', ['AltLeft', 'ShiftLeft'], 50)}
+              >
+                Alt+Shift
+              </Button>
+            </Tooltip>
+            <Tooltip title={t('keyboard.enterTip')}>
+              <Button
+                size="small"
+                loading={sendingKey === 'enter'}
+                disabled={sendingKey === 'alt'}
+                onClick={() => sendKeys('enter', ['Enter'], 40)}
+              >
+                Enter
+              </Button>
+            </Tooltip>
+          </div>
         </div>
         <div className="pb-3 text-xs text-neutral-500">{t('keyboard.tips')}</div>
 

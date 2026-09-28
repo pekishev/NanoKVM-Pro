@@ -113,6 +113,8 @@ const en = {
       ctrlaltdel: 'Ctrl+Alt+Del',
       dropdownEnglish: 'English',
       dropdownRussian: 'Russian',
+      altShiftTip: 'Switch the input language',
+      enterTip: 'Press Enter',
       shortcut: {
         title: 'Shortcuts',
         custom: 'Custom',
