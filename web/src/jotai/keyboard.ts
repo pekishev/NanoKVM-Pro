@@ -5,6 +5,3 @@ export const isKeyboardEnableAtom = atom(true);
 
 // is the virtual keyboard opened
 export const isKeyboardOpenAtom = atom(false);
-
-// leader key code for bypassing browser shortcuts (empty string means disabled)
-export const leaderKeyAtom = atom('');

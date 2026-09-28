@@ -23,37 +23,6 @@ export function setHidMode(mode: string) {
   return http.post('/api/hid/mode', data);
 }
 
-// get shortcuts
-export function getShortcuts() {
-  return http.get('/api/hid/shortcuts');
-}
-
-// add shortcut
-export function addShortcut(keys: any[]) {
-  const data = {
-    keys
-  };
-  return http.post('/api/hid/shortcut', data);
-}
-
-// delete shortcut
-export function deleteShortcut(id: string) {
-  const data = {
-    id
-  };
-  return http.delete('/api/hid/shortcut', data);
-}
-
-// get shortcut leader key
-export function getLeaderKey() {
-  return http.get('/api/hid/shortcut/leader-key');
-}
-
-// set shortcut leader key
-export function setLeaderKey(key: string) {
-  return http.post('/api/hid/shortcut/leader-key', { key });
-}
-
 export function getMacros() {
   return http.get('/api/hid/macros');
 }

@@ -7,9 +7,7 @@ import { isModifier } from '@/lib/keymap';
 import { client, MessageEvent } from '@/lib/websocket.ts';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 
-import { Recorder } from './recorder.tsx';
 import { useAltGr } from './useAltGr.ts';
-import { useLeaderKey } from './useLeaderKey.ts';
 import { normalizeKeyCode } from './utils.ts';
 
 export const Keyboard = () => {
@@ -27,11 +25,6 @@ export const Keyboard = () => {
     const report = type === 'keydown' ? kb.keyDown(code) : kb.keyUp(code);
     sendReport(report);
   };
-
-  // Init leader key handler
-  const leaderKey = useLeaderKey(pressedKeys);
-  const leaderKeyRef = useRef(leaderKey);
-  leaderKeyRef.current = leaderKey;
 
   // Init AltGr key handler
   const altGr = useAltGr(os, pressedKeys, sendKeyEvent);
@@ -56,12 +49,6 @@ export const Keyboard = () => {
       const code = normalizeKeyCode(os, event);
       if (!code || pressedKeys.current.has(code)) return;
 
-      // Handle leader key
-      const leaderHandled = leaderKeyRef.current.handleKeyDown(code, sendKeyEvent);
-      if (leaderHandled) {
-        return;
-      }
-
       // Handle AltGr key
       altGrRef.current.handleKeyDown(code, event.timeStamp);
 
@@ -78,12 +65,6 @@ export const Keyboard = () => {
 
       const code = normalizeKeyCode(os, event);
       if (!code) return;
-
-      // Handle leader key release
-      const leaderHandled = leaderKeyRef.current.handleKeyUp(code, sendKeyEvent);
-      if (leaderHandled) {
-        return;
-      }
 
       // Handle AltGr key release
       const altGrHandled = altGrRef.current.handleKeyUp(code);
@@ -132,7 +113,6 @@ export const Keyboard = () => {
       });
       pressedKeys.current.clear();
 
-      leaderKeyRef.current.reset(sendKeyEvent);
       altGrRef.current.reset();
 
       const report = keyboardRef.current.reset();
@@ -156,9 +136,5 @@ export const Keyboard = () => {
     client.send(data);
   }
 
-  return (
-    <>
-      <Recorder recordMode={leaderKey.recordMode} recordedKeys={leaderKey.recordedKeys} />
-    </>
-  );
+  return null;
 };
