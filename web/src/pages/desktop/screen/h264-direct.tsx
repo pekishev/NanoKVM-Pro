@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { useAtomValue } from 'jotai';
 
 import * as api from '@/api/stream.ts';
+import { captureFromWorker, setScreenCapturer } from '@/lib/screen-capture.ts';
 import { mouseStyleAtom } from '@/jotai/mouse';
 import { videoParametersAtom } from '@/jotai/screen.ts';
 
@@ -22,6 +23,7 @@ export const H264Direct = () => {
 
     const worker = new DirectWorker();
     workerRef.current = worker;
+    setScreenCapturer(() => captureFromWorker(worker));
 
     const offscreen = canvasRef.current.transferControlToOffscreen();
     worker.postMessage({ type: 'init_h264', canvas: offscreen }, [offscreen]);
@@ -46,6 +48,7 @@ export const H264Direct = () => {
     };
 
     return () => {
+      setScreenCapturer(null);
       if (ws.readyState === 1) {
         ws.close();
       }

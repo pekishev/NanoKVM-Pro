@@ -38,3 +38,19 @@ export function updateMacro(id: string, name: string, script: string) {
 export function deleteMacro(id: string) {
   return http.delete('/api/hid/macro', { id });
 }
+
+export function saveMacroImage(image: {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  png: string;
+}) {
+  return http.post('/api/hid/macro/image', image);
+}
+
+export function getMacroImage(id: string, name: string) {
+  return http.get('/api/hid/macro/image', { id, name });
+}

@@ -8,8 +8,11 @@ import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
 
 import { charToCodes } from './chars.ts';
+import { loadMacroImage, regionMatches } from './image.ts';
 import { parseScript } from './script.ts';
 import type { Macro, MouseButtonName, ScriptCommand } from './types.ts';
+
+const IMAGE_POLL_MS = 200;
 
 const BUTTON_INDEX: Record<MouseButtonName, number> = {
   left: 0,
@@ -150,6 +153,41 @@ async function playCommand(
       return null;
     case 'run':
       return playNestedMacro(command.name, macro, macros, mouse, depth);
+    case 'waitimage':
+      return waitForImage(macro, command.name, command.ms);
+  }
+}
+
+async function waitForImage(macro: Macro, name: string, timeoutMs: number): Promise<string | null> {
+  if (!macro.id) {
+    return `${macro.name}: image not found: ${name}`;
+  }
+
+  const reference = await loadMacroImage(macro.id, name);
+  if (!reference) {
+    return `${macro.name}: image not found: ${name}`;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let sawFrame = false;
+
+  for (;;) {
+    const matched = await regionMatches(reference);
+    if (matched === true) {
+      return null;
+    }
+    if (matched === false) {
+      sawFrame = true;
+    }
+
+    const now = Date.now();
+    if (now >= deadline) {
+      if (!sawFrame) {
+        return `${macro.name}: HDMI frame unavailable`;
+      }
+      return `${macro.name}: WAITIMAGE ${name} timed out`;
+    }
+    await sleep(Math.min(IMAGE_POLL_MS, deadline - now));
   }
 }
 

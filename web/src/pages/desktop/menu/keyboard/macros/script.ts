@@ -50,6 +50,9 @@ const SPECIAL_KEYS: Record<string, string> = {
   NUMLOCK: 'NumLock'
 };
 
+export const MACRO_IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
+export const MACRO_IMAGE_TIMEOUT_MAX = 300000;
+
 const BUTTONS: Record<string, MouseButtonName> = {
   LEFT: 'left',
   RIGHT: 'right',
@@ -124,7 +127,26 @@ function parseLine(raw: string): ScriptCommand | string {
     return { type: 'run', name: target };
   }
 
+  if (name === 'WAITIMAGE') {
+    return parseWaitImage(rest);
+  }
+
   return parseKeyLine(raw);
+}
+
+function parseWaitImage(rest: string): ScriptCommand | string {
+  const parts = rest.split(/\s+/).filter(Boolean);
+  if (parts.length !== 2) {
+    return 'WAITIMAGE needs NAME 0..300000 ms';
+  }
+  if (!MACRO_IMAGE_NAME.test(parts[0])) {
+    return 'WAITIMAGE name must be letters, digits, _ or -';
+  }
+  const ms = Number(parts[1]);
+  if (!Number.isInteger(ms) || ms < 0 || ms > MACRO_IMAGE_TIMEOUT_MAX) {
+    return 'WAITIMAGE needs NAME 0..300000 ms';
+  }
+  return { type: 'waitimage', name: parts[0], ms };
 }
 
 function parseMove(rest: string): ScriptCommand | string {

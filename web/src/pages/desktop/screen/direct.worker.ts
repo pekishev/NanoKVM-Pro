@@ -27,8 +27,34 @@ self.onmessage = (event: MessageEvent) => {
     case 'close':
       resetDecoder();
       break;
+    case 'snapshot':
+      postSnapshot();
+      break;
   }
 };
+
+function postSnapshot() {
+  if (!canvas || !ctx || canvas.width === 0 || canvas.height === 0) {
+    self.postMessage({ type: 'snapshot', ok: false });
+    return;
+  }
+
+  try {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    self.postMessage(
+      {
+        type: 'snapshot',
+        ok: true,
+        width: canvas.width,
+        height: canvas.height,
+        buffer: image.data.buffer
+      },
+      [image.data.buffer as ArrayBuffer]
+    );
+  } catch {
+    self.postMessage({ type: 'snapshot', ok: false });
+  }
+}
 
 function handleWsMessage(message: ArrayBuffer) {
   try {

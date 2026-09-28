@@ -4,27 +4,39 @@ import { useSetAtom } from 'jotai';
 import { Trash2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import * as api from '@/api/hid.ts';
+import { captureScreenFrame } from '@/lib/screen-capture.ts';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { ScrollArea } from '@/components/ui/scroll-area.tsx';
 
+import { type MacroImagePayload, cropToPng } from './image.ts';
 import { CoordinatePicker } from './picker.tsx';
 import { applyRecordEvent, createRecordState } from './record.ts';
-import { parseScript } from './script.ts';
-import type { Macro } from './types.ts';
+import { RegionPicker } from './region.tsx';
+import { MACRO_IMAGE_NAME, MACRO_IMAGE_TIMEOUT_MAX, parseScript } from './script.ts';
+import type { Macro, ScreenRect } from './types.ts';
 
 interface EditorProps {
   macros: Macro[];
-  saveMacro: (macro: Macro) => Promise<void>;
+  saveMacro: (macro: Macro) => Promise<string | null>;
   delMacro: (macro: Macro) => Promise<void>;
+  reloadMacros: () => Promise<void>;
   setIsEditing: (isEditing: boolean) => void;
   setIsPicking: (isPicking: boolean) => void;
 }
 
-type InsertKind = 'CLICK' | 'DBLCLICK' | 'MOVE';
+type InsertKind = 'CLICK' | 'DBLCLICK' | 'MOVE' | 'IMAGE';
 
 const emptyMacro = (): Macro => ({ name: '', script: '' });
 
-export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking }: EditorProps) => {
+export const Editor = ({
+  macros,
+  saveMacro,
+  delMacro,
+  reloadMacros,
+  setIsEditing,
+  setIsPicking
+}: EditorProps) => {
   const { t } = useTranslation();
   const setIsKeyboardEnable = useSetAtom(isKeyboardEnableAtom);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -36,8 +48,13 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
   const [parseError, setParseError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordStatus, setRecordStatus] = useState('');
+  const [imageAsk, setImageAsk] = useState(false);
+  const [imageName, setImageName] = useState('');
+  const [imageTimeout, setImageTimeout] = useState('20000');
+  const [pendingImages, setPendingImages] = useState<Record<string, MacroImagePayload>>({});
   const recordStateRef = useRef(createRecordState());
   const fullscreenRequestedRef = useRef(false);
+  const imagePickRef = useRef<{ name: string; ms: number } | null>(null);
 
   const isPicking = pickingKind !== null;
   const parsed = parseScript(draft.script);
@@ -88,6 +105,11 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
     setDraft(macro ? { ...macro } : emptyMacro());
     setPickingKind(null);
     setParseError('');
+    setImageAsk(false);
+    setImageName('');
+    setImageTimeout('20000');
+    setPendingImages({});
+    imagePickRef.current = null;
     setIsModalOpen(true);
   }
 
@@ -110,6 +132,9 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
     stopRecording();
     setDraft(emptyMacro());
     setParseError('');
+    setImageAsk(false);
+    setPendingImages({});
+    imagePickRef.current = null;
     setIsModalOpen(false);
   }
 
@@ -185,8 +210,59 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
   }
 
   function cancelPicking() {
+    imagePickRef.current = null;
     setPickingKind(null);
     setIsModalOpen(true);
+  }
+
+  function startImagePick() {
+    const name = imageName.trim();
+    const ms = Number(imageTimeout);
+    if (!MACRO_IMAGE_NAME.test(name)) {
+      setParseError(t('keyboard.macro.imageNameInvalid'));
+      return;
+    }
+    if (!Number.isInteger(ms) || ms < 0 || ms > MACRO_IMAGE_TIMEOUT_MAX) {
+      setParseError(t('keyboard.macro.imageTimeoutInvalid'));
+      return;
+    }
+
+    stopRecording();
+    imagePickRef.current = { name, ms };
+    setParseError('');
+    setPickingKind('IMAGE');
+    setIsModalOpen(false);
+  }
+
+  async function handleRegion(rect: ScreenRect) {
+    const pick = imagePickRef.current;
+    imagePickRef.current = null;
+    setPickingKind(null);
+    setIsModalOpen(true);
+    if (!pick) return;
+
+    const frame = await captureScreenFrame();
+    if (!frame) {
+      setParseError(t('keyboard.macro.imageCaptureFailed'));
+      return;
+    }
+
+    const png = cropToPng(frame, rect);
+    if (!png) {
+      setParseError(t('keyboard.macro.imageCaptureFailed'));
+      return;
+    }
+
+    setPendingImages((prev) => ({
+      ...prev,
+      [pick.name]: { name: pick.name, x: rect.x, y: rect.y, w: rect.w, h: rect.h, png }
+    }));
+    setDraft((prev) => {
+      const script = prev.script.trimEnd();
+      const prefix = script ? `${script}\n` : '';
+      return { ...prev, script: `${prefix}WAITIMAGE ${pick.name} ${pick.ms}\n` };
+    });
+    setParseError('');
   }
 
   async function handleSave() {
@@ -200,13 +276,29 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
 
     setIsSaving(true);
     try {
-      await saveMacro({
+      const savedId = await saveMacro({
         id: draft.id,
         name: draft.name.trim(),
         script: draft.script.replace(/\r\n/g, '\n')
       });
+      if (!savedId) return;
+
+      setDraft((prev) => ({ ...prev, id: savedId }));
+      const images = Object.values(pendingImages);
+      for (const image of images) {
+        const rsp = await api.saveMacroImage({ id: savedId, ...image });
+        if (rsp.code !== 0) {
+          await reloadMacros();
+          setParseError(t('keyboard.macro.imageSaveFailed'));
+          return;
+        }
+      }
+      await reloadMacros();
+
       stopRecording();
       setDraft(emptyMacro());
+      setPendingImages({});
+      setImageAsk(false);
       setParseError('');
     } catch (err) {
       console.log(err);
@@ -278,7 +370,40 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
             <Button size="small" onClick={() => startPicking('MOVE')}>
               MOVE
             </Button>
+            <Button size="small" type={imageAsk ? 'primary' : 'default'} onClick={() => setImageAsk((open) => !open)}>
+              WAITIMAGE
+            </Button>
           </div>
+
+          {imageAsk && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                size="small"
+                maxLength={32}
+                className="w-36"
+                placeholder={t('keyboard.macro.imageName')}
+                value={imageName}
+                onChange={(e) => setImageName(e.target.value)}
+              />
+              <Input
+                size="small"
+                className="w-28"
+                placeholder="20000"
+                value={imageTimeout}
+                onChange={(e) => setImageTimeout(e.target.value)}
+              />
+              <Button size="small" type="primary" onClick={startImagePick}>
+                {t('keyboard.macro.imageSelect')}
+              </Button>
+              <span className="text-xs text-neutral-500">{t('keyboard.macro.imageHint')}</span>
+            </div>
+          )}
+
+          {Object.keys(pendingImages).length > 0 && (
+            <div className="text-xs text-neutral-400">
+              {t('keyboard.macro.imagePending', { names: Object.keys(pendingImages).join(', ') })}
+            </div>
+          )}
 
           {isRecording && (
             <div className="text-xs leading-5 text-neutral-400">
@@ -348,7 +473,8 @@ export const Editor = ({ macros, saveMacro, delMacro, setIsEditing, setIsPicking
         )}
       </Modal>
 
-      <CoordinatePicker open={isPicking} onPick={handlePicked} onCancel={cancelPicking} />
+      <CoordinatePicker open={isPicking && pickingKind !== 'IMAGE'} onPick={handlePicked} onCancel={cancelPicking} />
+      <RegionPicker open={pickingKind === 'IMAGE'} onPick={handleRegion} onCancel={cancelPicking} />
     </>
   );
 };

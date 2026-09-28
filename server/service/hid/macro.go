@@ -61,7 +61,7 @@ func (s *Service) AddMacro(c *gin.Context) {
 		return
 	}
 
-	rsp.OkRsp(c)
+	rsp.OkRspWithData(c, &proto.AddMacroRsp{ID: macro.ID})
 	log.Debugf("add macro %s", macro.ID)
 }
 
@@ -252,5 +252,12 @@ func deleteMacro(id string) error {
 	}
 
 	store.Macros = newMacros
-	return saveMacros(store)
+	if err := saveMacros(store); err != nil {
+		return err
+	}
+
+	if err := removeMacroImages(id); err != nil {
+		log.Errorf("failed to remove macro images %s: %v", id, err)
+	}
+	return nil
 }

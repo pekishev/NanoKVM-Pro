@@ -18,6 +18,8 @@ func hidRouter(r *gin.Engine) {
 	api.POST("/hid/macro", service.AddMacro)           // add macro
 	api.POST("/hid/macro/update", service.UpdateMacro) // update macro
 	api.DELETE("/hid/macro", service.DeleteMacro)      // delete macro
+	api.POST("/hid/macro/image", service.SaveMacroImage)
+	api.GET("/hid/macro/image", service.GetMacroImage)
 
 	api.GET("/hid/mode", service.GetHidMode)  // get hid mode
 	api.POST("/hid/mode", service.SetHidMode) // set hid mode

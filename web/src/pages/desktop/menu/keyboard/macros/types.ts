@@ -6,7 +6,15 @@ export type ScriptCommand =
   | { type: 'key'; codes: string[] }
   | { type: 'move'; x: number; y: number }
   | { type: 'click'; x: number; y: number; button: MouseButtonName; times: number }
-  | { type: 'run'; name: string };
+  | { type: 'run'; name: string }
+  | { type: 'waitimage'; name: string; ms: number };
+
+export type ScreenRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 export interface Macro {
   id?: string;

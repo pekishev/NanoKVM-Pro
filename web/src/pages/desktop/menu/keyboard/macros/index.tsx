@@ -38,17 +38,17 @@ export const Macros = () => {
     }
   }
 
-  async function saveMacro(macro: Macro) {
+  async function saveMacro(macro: Macro): Promise<string | null> {
     const rsp = macro.id
       ? await api.updateMacro(macro.id, macro.name, macro.script)
       : await api.addMacro(macro.name, macro.script);
 
     if (rsp.code !== 0) {
       console.log(rsp.msg);
-      return;
+      return null;
     }
 
-    await getMacros();
+    return macro.id || rsp.data?.id || null;
   }
 
   async function delMacro(macro: Macro) {
@@ -95,6 +95,7 @@ export const Macros = () => {
         macros={macros}
         saveMacro={saveMacro}
         delMacro={delMacro}
+        reloadMacros={getMacros}
         setIsEditing={setIsEditing}
         setIsPicking={setIsPicking}
       />
