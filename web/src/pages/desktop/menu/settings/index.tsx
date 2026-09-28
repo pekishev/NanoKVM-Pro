@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/application.ts';
 import * as ls from '@/lib/localstorage.ts';
-import { isUpdateAvailable } from '@/lib/update.ts';
+import { isUpdateAvailable as hasUpdate } from '@/lib/update.ts';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { isSettingsOpenAtom, settingTabAtom, submenuOpenCountAtom } from '@/jotai/settings.ts';
 import { Tailscale as TailscaleIcon } from '@/components/icons/tailscale';
@@ -71,7 +71,7 @@ export const Settings = () => {
         return;
       }
 
-      if (isUpdateAvailable(rsp.data)) {
+      if (hasUpdate(rsp.data)) {
         setIsUpdateAvailable(true);
       }
     });
