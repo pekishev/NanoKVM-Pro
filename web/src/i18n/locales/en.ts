@@ -106,7 +106,7 @@ const en = {
     keyboard: {
       title: 'Keyboard',
       paste: 'Paste',
-      tips: 'Only standard keyboard letters and symbols are supported',
+      tips: 'Only standard keyboard letters and symbols are supported. The selected keyboard is the current layout; mixed text switches it with Alt+Shift.',
       placeholder: 'Please input',
       submit: 'Submit',
       virtual: 'Keyboard',
@@ -115,6 +115,7 @@ const en = {
       dropdownRussian: 'Russian',
       altShiftTip: 'Switch the input language',
       enterTip: 'Press Enter',
+      switchFailed: 'Failed to switch the input language',
       shortcut: {
         title: 'Shortcuts',
         custom: 'Custom',

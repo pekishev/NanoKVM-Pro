@@ -12,56 +12,163 @@ import { client, MessageEvent } from '@/lib/websocket.ts';
 
 const { TextArea } = Input;
 
+type Layout = 'en' | 'ru';
+
 const languages = [
   { value: 'en', labelKey: 'keyboard.dropdownEnglish' },
   { value: 'ru', labelKey: 'keyboard.dropdownRussian' }
 ];
 
-// Extended RU → EN translation including punctuation (Russian keyboard layout to US key codes)
-function translateRuToEnWithPunctuation(value: string): string {
-  const letterMap: Record<string, string> = {
-    ё: '`',
-    й: 'q', ц: 'w', у: 'e', к: 'r', е: 't', н: 'y', г: 'u', ш: 'i', щ: 'o', з: 'p',
-    х: '[', ъ: ']',
-    ф: 'a', ы: 's', в: 'd', а: 'f', п: 'g', р: 'h', о: 'j', л: 'k', д: 'l', ж: ';', э: "'",
-    я: 'z', ч: 'x', с: 'c', м: 'v', и: 'b', т: 'n', ь: 'm', б: ',', ю: '.'
-  };
-  const punctuationMap: Record<string, string> = {
-    '"': '@', '№': '#', ';': '$', ':': '^', '?': '&', 'Ё': '~', '/': '|', '.': '/', ',': '?'
-  };
-  return Array.from(value)
-    .map((ch) => {
-      const lower = ch.toLowerCase();
-      if (letterMap[lower]) {
-        const translated = letterMap[lower];
-        return ch === lower ? translated : translated.toUpperCase();
-      }
-      if (punctuationMap[ch]) return punctuationMap[ch];
-      return ch;
-    })
-    .join('');
+// Physical US keys that produce the same character on both layouts.
+const sharedChars = new Set([
+  ...'0123456789',
+  '!',
+  '%',
+  '*',
+  '(',
+  ')',
+  '-',
+  '_',
+  '=',
+  '+',
+  '\\',
+  ' ',
+  '\n',
+  '\t'
+]);
+
+// Characters the paste API can type on a US layout.
+const enChars = new Set(
+  `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*() \n\t-=[]\\;'\`,./_+{}|:"~<>?`
+);
+
+const letterMap: Record<string, string> = {
+  ё: '`',
+  й: 'q',
+  ц: 'w',
+  у: 'e',
+  к: 'r',
+  е: 't',
+  н: 'y',
+  г: 'u',
+  ш: 'i',
+  щ: 'o',
+  з: 'p',
+  х: '[',
+  ъ: ']',
+  ф: 'a',
+  ы: 's',
+  в: 'd',
+  а: 'f',
+  п: 'g',
+  р: 'h',
+  о: 'j',
+  л: 'k',
+  д: 'l',
+  ж: ';',
+  э: "'",
+  я: 'z',
+  ч: 'x',
+  с: 'c',
+  м: 'v',
+  и: 'b',
+  т: 'n',
+  ь: 'm',
+  б: ',',
+  ю: '.'
+};
+
+const punctuationMap: Record<string, string> = {
+  '"': '@',
+  '№': '#',
+  ';': '$',
+  ':': '^',
+  '?': '&',
+  '/': '|',
+  '.': '/',
+  ',': '?'
+};
+
+const shiftMap: Record<string, string> = {
+  '`': '~',
+  '-': '_',
+  '=': '+',
+  '[': '{',
+  ']': '}',
+  '\\': '|',
+  ';': ':',
+  "'": '"',
+  ',': '<',
+  '.': '>',
+  '/': '?'
+};
+
+function withShift(key: string): string {
+  if (key >= 'a' && key <= 'z') return key.toUpperCase();
+  return shiftMap[key] ?? key;
 }
 
-function isValidForLanguage(value: string, lang: string): boolean {
-  const isRussian = lang === 'ru';
+function enKeyFor(ch: string): string | null {
+  return enChars.has(ch) ? ch : null;
+}
+
+function ruKeyFor(ch: string): string | null {
+  if (sharedChars.has(ch)) return ch;
+
+  const lower = ch.toLowerCase();
+  const base = letterMap[lower];
+  if (base) return ch === lower ? base : withShift(base);
+
+  return punctuationMap[ch] ?? null;
+}
+
+function keyFor(layout: Layout, ch: string): string | null {
+  return layout === 'en' ? enKeyFor(ch) : ruKeyFor(ch);
+}
+
+function canType(value: string): boolean {
   for (const ch of value) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (isRussian) {
-      if (
-        (code >= 0x0410 && code <= 0x042f) || // А-Я
-        (code >= 0x0430 && code <= 0x044f) || // а-я
-        code === 0x0401 || // Ё
-        code === 0x0451 || // ё
-        (code >= 0x20 && code <= 0x7e && !(code >= 0x41 && code <= 0x5a) && !(code >= 0x61 && code <= 0x7a))
-      ) {
-        continue;
-      }
-      return false;
-    }
-    if (code <= 0x7f) continue;
-    return false;
+    if (ch === '\r') continue;
+    if (enKeyFor(ch) == null && ruKeyFor(ch) == null) return false;
   }
   return true;
+}
+
+type PasteSegment = { layout: Layout; text: string };
+
+// Split text into layout runs. A run changes only when the current layout
+// cannot type the character and the other layout can.
+function planPaste(value: string, start: Layout): PasteSegment[] | null {
+  let layout = start;
+  const segments: PasteSegment[] = [];
+  let text = '';
+
+  const flush = () => {
+    if (!text) return;
+    segments.push({ layout, text });
+    text = '';
+  };
+
+  for (const ch of value) {
+    if (ch === '\r') continue;
+
+    const key = keyFor(layout, ch);
+    if (key != null) {
+      text += key;
+      continue;
+    }
+
+    const other: Layout = layout === 'en' ? 'ru' : 'en';
+    const otherKey = keyFor(other, ch);
+    if (otherKey == null) return null;
+
+    flush();
+    layout = other;
+    text = otherKey;
+  }
+
+  flush();
+  return segments;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -69,19 +176,19 @@ function sleep(ms: number): Promise<void> {
 }
 
 function sendKeyboard(report: Uint8Array) {
-  client.send(new Uint8Array([MessageEvent.Keyboard, ...report]));
+  return client.send(new Uint8Array([MessageEvent.Keyboard, ...report]));
 }
 
 async function pressKeys(codes: string[], holdMs: number) {
   const keyboard = new KeyboardReport();
 
   for (const code of codes) {
-    sendKeyboard(keyboard.keyDown(code));
+    if (!sendKeyboard(keyboard.keyDown(code))) return false;
     await sleep(30);
   }
 
   await sleep(holdMs);
-  sendKeyboard(keyboard.reset());
+  return sendKeyboard(keyboard.reset());
 }
 
 export const Paste = () => {
@@ -90,7 +197,7 @@ export const Paste = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState<Layout>('en');
   const [status, setStatus] = useState<'' | 'error'>('');
   const [isLoading, setIsLoading] = useState(false);
   const [sendingKey, setSendingKey] = useState<'' | 'alt' | 'enter'>('');
@@ -101,34 +208,55 @@ export const Paste = () => {
 
   function onChange(e: ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
-    setStatus(isValidForLanguage(value, language) ? '' : 'error');
+    setStatus(canType(value) ? '' : 'error');
     setInputValue(value);
   }
 
-  function onLanguageChange(value: string) {
+  function onLanguageChange(value: Layout) {
     setLanguage(value);
-    setStatus(inputValue ? (isValidForLanguage(inputValue, value) ? '' : 'error') : '');
   }
 
-  function submit() {
-    if (isLoading || !inputValue) return;
-    setIsLoading(true);
-    const textToSend = language === 'ru' ? translateRuToEnWithPunctuation(inputValue) : inputValue;
+  async function submit() {
+    if (isLoading || sendingRef.current || !inputValue || status === 'error') return;
 
-    paste(textToSend)
-      .then((rsp) => {
+    const segments = planPaste(inputValue, language);
+    if (!segments) {
+      setStatus('error');
+      return;
+    }
+
+    sendingRef.current = true;
+    setIsLoading(true);
+    let layout = language;
+
+    try {
+      for (const segment of segments) {
+        if (segment.layout !== layout) {
+          const switched = await pressKeys(['AltLeft', 'ShiftLeft'], 50);
+          if (!switched) {
+            setErrMsg(t('keyboard.switchFailed'));
+            return;
+          }
+          await sleep(100);
+          layout = segment.layout;
+          setLanguage(layout);
+        }
+
+        const rsp = await paste(segment.text);
         if (rsp.code !== 0) {
           setErrMsg(rsp.msg);
           return;
         }
-        setInputValue('');
-        setStatus('');
-        setErrMsg('');
-        setIsModalOpen(false);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+      }
+
+      setInputValue('');
+      setStatus('');
+      setErrMsg('');
+      setIsModalOpen(false);
+    } finally {
+      sendingRef.current = false;
+      setIsLoading(false);
+    }
   }
 
   async function sendKeys(kind: 'alt' | 'enter', codes: string[], holdMs: number) {
@@ -136,7 +264,14 @@ export const Paste = () => {
     sendingRef.current = true;
     setSendingKey(kind);
     try {
-      await pressKeys(codes, holdMs);
+      const sent = await pressKeys(codes, holdMs);
+      if (!sent) {
+        setErrMsg(t('keyboard.switchFailed'));
+        return;
+      }
+      if (kind === 'alt') {
+        setLanguage((current) => (current === 'en' ? 'ru' : 'en'));
+      }
     } finally {
       sendingRef.current = false;
       setSendingKey('');
@@ -186,7 +321,7 @@ export const Paste = () => {
               <Button
                 size="small"
                 loading={sendingKey === 'alt'}
-                disabled={sendingKey === 'enter'}
+                disabled={isLoading || sendingKey === 'enter'}
                 onClick={() => sendKeys('alt', ['AltLeft', 'ShiftLeft'], 50)}
               >
                 Alt+Shift
@@ -196,7 +331,7 @@ export const Paste = () => {
               <Button
                 size="small"
                 loading={sendingKey === 'enter'}
-                disabled={sendingKey === 'alt'}
+                disabled={isLoading || sendingKey === 'alt'}
                 onClick={() => sendKeys('enter', ['Enter'], 40)}
               >
                 Enter
@@ -220,7 +355,7 @@ export const Paste = () => {
         {errMsg && <div className="pt-1 text-sm text-red-500">{errMsg}</div>}
 
         <div className="flex justify-center py-3">
-          <Button type="primary" loading={isLoading} htmlType="submit" onClick={submit}>
+          <Button type="primary" loading={isLoading} disabled={status === 'error'} htmlType="submit" onClick={submit}>
             {t('keyboard.submit')}
           </Button>
         </div>
