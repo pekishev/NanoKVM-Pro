@@ -13,6 +13,16 @@ import { parseScript } from './script.ts';
 import type { Macro, MouseButtonName, ScriptCommand } from './types.ts';
 
 const IMAGE_POLL_MS = 200;
+// A single frame can be mid-redraw; require the fragment on consecutive polls.
+const IMAGE_CONFIRM_FRAMES = 2;
+const IMAGE_CONFIRM_MS = 100;
+
+// Keyboard report pacing. A plain key is down, hold, then release.
+// STRING adds KEY_GAP_MS between characters. Mouse timing is unchanged.
+const KEY_DOWN_MS = 50;
+const KEY_HOLD_MS = 80;
+const KEY_GAP_MS = 80;
+const COMMAND_GAP_MS = 100;
 
 const BUTTON_INDEX: Record<MouseButtonName, number> = {
   left: 0,
@@ -70,10 +80,10 @@ async function pressCodes(codes: string[]) {
 
   for (const code of codes) {
     sendKeyboard(keyboard.keyDown(code));
-    await sleep(30);
+    await sleep(KEY_DOWN_MS);
   }
 
-  await sleep(50);
+  await sleep(KEY_HOLD_MS);
   sendKeyboard(keyboard.reset());
 }
 
@@ -84,7 +94,7 @@ async function typeText(text: string) {
       continue;
     }
     await pressCodes(codes);
-    await sleep(50);
+    await sleep(KEY_GAP_MS);
   }
 }
 
@@ -121,7 +131,7 @@ async function playCommands(
     }
 
     if (command.type !== 'delay') {
-      await sleep(30);
+      await sleep(COMMAND_GAP_MS);
     }
   }
 
@@ -170,15 +180,22 @@ async function waitForImage(macro: Macro, name: string, timeoutMs: number): Prom
 
   const deadline = Date.now() + timeoutMs;
   let sawFrame = false;
+  let streak = 0;
 
   for (;;) {
     const matched = await regionMatches(reference);
-    if (matched === true) {
-      return null;
-    }
-    if (matched === false) {
+    if (matched !== null) {
       sawFrame = true;
     }
+    if (matched === true) {
+      streak++;
+      if (streak >= IMAGE_CONFIRM_FRAMES) {
+        return null;
+      }
+      await sleep(IMAGE_CONFIRM_MS);
+      continue;
+    }
+    streak = 0;
 
     const now = Date.now();
     if (now >= deadline) {

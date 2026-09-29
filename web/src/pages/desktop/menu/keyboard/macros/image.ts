@@ -5,9 +5,23 @@ import type { ScreenRect } from './types.ts';
 
 const MAX_EDGE = 96;
 
-// H.264 and MJPEG shift edges by a few levels. A stable fragment stays under this;
-// a different screen is usually far above it.
-export const MATCH_MAE = 40;
+// Matching runs in reference pixels. Mean RGB difference alone cannot tell a small
+// light-on-dark label from an empty background, so structure is compared on luma
+// normalized by mean/std (ZNCC) and additionally per grid cell, so one changed glyph
+// is not averaged away. Thresholds are calibrated against H.264/MJPEG artifacts and
+// 2x rescaling: a true match stays within them, a changed glyph lands far outside.
+// Luma hides hue (green and yellow icons of one shape correlate perfectly), so colour
+// is checked separately as per-cell chroma; 4:2:0 subsampling keeps a match under ~40.
+const SEARCH_PX = 2;
+const GRID = 3;
+const MIN_ZNCC = 0.75;
+const MAX_CELL_RESIDUAL = 1.7;
+const MAX_CELL_CHROMA = 50;
+const MIN_CONTRAST = 0.5;
+const MAX_CONTRAST = 2;
+const MAX_MAE = 28;
+const FLAT_STD = 4;
+const FLAT_MAE = 12;
 
 export type MacroImagePayload = ScreenRect & {
   name: string;
@@ -18,6 +32,9 @@ export type LoadedMacroImage = ScreenRect & {
   width: number;
   height: number;
   data: Uint8ClampedArray;
+  luma: Float32Array;
+  mean: number;
+  std: number;
 };
 
 export function cropToPng(frame: ScreenFrame, rect: ScreenRect): string | null {
@@ -52,6 +69,20 @@ export async function loadMacroImage(id: string, name: string): Promise<LoadedMa
   const frame = await pngPixels(rsp.data.png);
   if (!frame) return null;
 
+  const pixels = frame.width * frame.height;
+  const luma = new Float32Array(pixels);
+  let sum = 0;
+  for (let i = 0; i < pixels; i++) {
+    const k = i * 4;
+    luma[i] = toLuma(frame.data[k], frame.data[k + 1], frame.data[k + 2]);
+    sum += luma[i];
+  }
+  const mean = sum / pixels;
+  let variance = 0;
+  for (let i = 0; i < pixels; i++) {
+    variance += (luma[i] - mean) ** 2;
+  }
+
   return {
     x: Number(rsp.data.x),
     y: Number(rsp.data.y),
@@ -59,7 +90,10 @@ export async function loadMacroImage(id: string, name: string): Promise<LoadedMa
     h: Number(rsp.data.h),
     width: frame.width,
     height: frame.height,
-    data: frame.data
+    data: frame.data,
+    luma,
+    mean,
+    std: Math.sqrt(variance / pixels)
   };
 }
 
@@ -71,21 +105,111 @@ export async function regionMatches(reference: LoadedMacroImage): Promise<boolea
   const region = regionPixels(frame, reference);
   if (!region) return null;
 
-  const live = scaleCrop(frame, region, reference.width, reference.height);
-  if (!live) return null;
-  return meanAbsDiff(live, reference.data) <= MATCH_MAE;
+  const kx = reference.width / region.w;
+  const ky = reference.height / region.h;
+  const left = Math.max(0, region.x - Math.ceil(SEARCH_PX / kx));
+  const top = Math.max(0, region.y - Math.ceil(SEARCH_PX / ky));
+  const right = Math.min(frame.width, region.x + region.w + Math.ceil(SEARCH_PX / kx));
+  const bottom = Math.min(frame.height, region.y + region.h + Math.ceil(SEARCH_PX / ky));
+
+  const winW = Math.max(reference.width, Math.round((right - left) * kx));
+  const winH = Math.max(reference.height, Math.round((bottom - top) * ky));
+  const win = scaleCrop(frame, { x: left, y: top, w: right - left, h: bottom - top }, winW, winH);
+  if (!win) return null;
+
+  const ox = Math.round((region.x - left) * kx);
+  const oy = Math.round((region.y - top) * ky);
+  const maxDx = Math.min(winW - reference.width, ox + SEARCH_PX);
+  const maxDy = Math.min(winH - reference.height, oy + SEARCH_PX);
+  for (let dy = Math.max(0, oy - SEARCH_PX); dy <= maxDy; dy++) {
+    for (let dx = Math.max(0, ox - SEARCH_PX); dx <= maxDx; dx++) {
+      if (matchesAt(win, winW, dx, dy, reference)) return true;
+    }
+  }
+  return false;
 }
 
-export function meanAbsDiff(a: Uint8ClampedArray, b: Uint8ClampedArray): number {
-  const pixels = Math.floor(Math.min(a.length, b.length) / 4);
-  if (pixels <= 0 || a.length !== b.length) return 255;
-
+function matchesAt(
+  win: Uint8ClampedArray,
+  winW: number,
+  dx: number,
+  dy: number,
+  ref: LoadedMacroImage
+): boolean {
+  const { width: w, height: h } = ref;
+  const pixels = w * h;
+  const live = new Float32Array(pixels);
+  const cellChroma = new Float64Array(GRID * GRID);
+  const cellCount = new Uint32Array(GRID * GRID);
   let sum = 0;
-  const bytes = pixels * 4;
-  for (let i = 0; i < bytes; i += 4) {
-    sum += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+  let colorDiff = 0;
+  for (let y = 0; y < h; y++) {
+    const row = Math.floor((y * GRID) / h) * GRID;
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const j = ((y + dy) * winW + x + dx) * 4;
+      const k = i * 4;
+      const r = win[j];
+      const g = win[j + 1];
+      const b = win[j + 2];
+      const l = toLuma(r, g, b);
+      live[i] = l;
+      sum += l;
+      colorDiff +=
+        Math.abs(r - ref.data[k]) + Math.abs(g - ref.data[k + 1]) + Math.abs(b - ref.data[k + 2]);
+
+      const rl = ref.luma[i];
+      const cell = row + Math.floor((x * GRID) / w);
+      cellChroma[cell] += Math.max(
+        Math.abs(r - l - (ref.data[k] - rl)),
+        Math.abs(g - l - (ref.data[k + 1] - rl)),
+        Math.abs(b - l - (ref.data[k + 2] - rl))
+      );
+      cellCount[cell]++;
+    }
   }
-  return sum / (pixels * 3);
+
+  const mae = colorDiff / (pixels * 3);
+  if (mae > MAX_MAE) return false;
+  for (let c = 0; c < cellChroma.length; c++) {
+    if (cellCount[c] && cellChroma[c] / cellCount[c] > MAX_CELL_CHROMA) return false;
+  }
+
+  const mean = sum / pixels;
+  let variance = 0;
+  for (let i = 0; i < pixels; i++) {
+    variance += (live[i] - mean) ** 2;
+  }
+  const std = Math.sqrt(variance / pixels);
+
+  if (ref.std < FLAT_STD) {
+    return mae <= FLAT_MAE && std < ref.std + FLAT_STD;
+  }
+  if (std < ref.std * MIN_CONTRAST || std > ref.std * MAX_CONTRAST) return false;
+
+  const cellSum = new Float64Array(GRID * GRID);
+  let cov = 0;
+  for (let y = 0; y < h; y++) {
+    const row = Math.floor((y * GRID) / h) * GRID;
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const a = (live[i] - mean) / std;
+      const b = (ref.luma[i] - ref.mean) / ref.std;
+      cov += a * b;
+      const cell = row + Math.floor((x * GRID) / w);
+      cellSum[cell] += (a - b) ** 2;
+    }
+  }
+  if (cov / pixels < MIN_ZNCC) return false;
+
+  for (let c = 0; c < cellSum.length; c++) {
+    if (cellCount[c] && cellSum[c] / cellCount[c] > MAX_CELL_RESIDUAL) return false;
+  }
+  return true;
+}
+
+function toLuma(r: number, g: number, b: number): number {
+  return r * 0.299 + g * 0.587 + b * 0.114;
 }
 
 function pngPixels(base64: string): Promise<ScreenFrame | null> {
