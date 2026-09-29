@@ -110,6 +110,12 @@ const ru = {
       altShiftTip: 'Переключить язык ввода',
       enterTip: 'Нажать Enter',
       switchFailed: 'Не удалось переключить язык ввода',
+      voice: 'Голосовой ввод',
+      voiceStop: 'Остановить голосовой ввод',
+      voiceHttps: 'Для голосового ввода нужен HTTPS',
+      voiceDenied: 'Нет доступа к микрофону',
+      voiceNetwork: 'Сервис распознавания речи недоступен',
+      voiceError: 'Ошибка распознавания речи: {{error}}',
       macro: {
         title: 'Макросы',
         custom: 'Настроить',

@@ -1,8 +1,8 @@
-import { ChangeEvent, useRef, useState } from 'react';
-import { Button, Input, Modal, Select, Tooltip, type InputRef } from 'antd';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { Button, Input, Modal, Select, Space, Tooltip, type InputRef } from 'antd';
 import clsx from 'clsx';
 import { useSetAtom } from 'jotai';
-import { ClipboardIcon } from 'lucide-react';
+import { ClipboardIcon, MicIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { paste } from '@/api/hid';
@@ -126,13 +126,83 @@ function keyFor(layout: Layout, ch: string): string | null {
   return layout === 'en' ? enKeyFor(ch) : ruKeyFor(ch);
 }
 
+function isTypeable(ch: string): boolean {
+  return enKeyFor(ch) != null || ruKeyFor(ch) != null;
+}
+
 function canType(value: string): boolean {
   for (const ch of value) {
     if (ch === '\r') continue;
-    if (enKeyFor(ch) == null && ruKeyFor(ch) == null) return false;
+    if (!isTypeable(ch)) return false;
   }
   return true;
 }
+
+const maxLength = 1024;
+
+// Typographic characters that speech recognizers emit but a keyboard cannot type.
+const speechReplacements: Record<string, string> = {
+  '«': '"',
+  '»': '"',
+  '„': '"',
+  '“': '"',
+  '”': '"',
+  '‘': "'",
+  '’': "'",
+  '‚': "'",
+  '—': '-',
+  '–': '-',
+  '‒': '-',
+  '−': '-',
+  '‑': '-',
+  '…': '...',
+  '\u00a0': ' ',
+  '\u2009': ' ',
+  '\u202f': ' '
+};
+
+function toTypeable(text: string): string {
+  let out = '';
+  for (const ch of text) {
+    for (const c of speechReplacements[ch] ?? ch) {
+      if (isTypeable(c)) out += c;
+    }
+  }
+  return out;
+}
+
+function appendChunk(text: string, chunk: string): string {
+  const trimmed = chunk.trim();
+  if (!trimmed) return text;
+  return text && !/\s$/.test(text) ? `${text} ${trimmed}` : text + trimmed;
+}
+
+type SpeechRecognitionResultLike = { isFinal: boolean; 0: { transcript: string } };
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<SpeechRecognitionResultLike> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+const speechWindow = window as unknown as {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+};
+const SpeechRecognitionImpl = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+
+const voiceLanguages = [
+  { value: 'ru', label: 'RU' },
+  { value: 'en', label: 'EN' }
+];
 
 type PasteSegment = { layout: Layout; text: string };
 
@@ -192,7 +262,7 @@ async function pressKeys(codes: string[], holdMs: number) {
 }
 
 export const Paste = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const setIsKeyboardEnable = useSetAtom(isKeyboardEnableAtom);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -203,8 +273,85 @@ export const Paste = () => {
   const [sendingKey, setSendingKey] = useState<'' | 'alt' | 'enter'>('');
   const [errMsg, setErrMsg] = useState('');
 
+  const [voiceLanguage, setVoiceLanguage] = useState<Layout>(i18n.language.startsWith('ru') ? 'ru' : 'en');
+  const [isListening, setIsListening] = useState(false);
+
   const inputRef = useRef<InputRef>(null);
   const sendingRef = useRef(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceTextRef = useRef('');
+
+  useEffect(() => () => recognitionRef.current?.abort(), []);
+
+  function stopVoice() {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognitionRef.current = null;
+    recognition.onresult = null;
+    recognition.abort();
+    setIsListening(false);
+  }
+
+  function voiceErrorMessage(error: string): string {
+    if (error === 'not-allowed' || error === 'service-not-allowed') return t('keyboard.voiceDenied');
+    if (error === 'network') return t('keyboard.voiceNetwork');
+    return t('keyboard.voiceError', { error });
+  }
+
+  function toggleVoice() {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+    if (!SpeechRecognitionImpl) return;
+
+    const recognition = new SpeechRecognitionImpl();
+    recognition.lang = voiceLanguage === 'ru' ? 'ru-RU' : 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    voiceTextRef.current = inputValue;
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        const text = toTypeable(result[0].transcript);
+        if (result.isFinal) {
+          voiceTextRef.current = appendChunk(voiceTextRef.current, text);
+        } else {
+          interim = appendChunk(interim, text);
+        }
+      }
+
+      const value = appendChunk(voiceTextRef.current, interim).slice(0, maxLength);
+      setStatus(canType(value) ? '' : 'error');
+      setInputValue(value);
+    };
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      setErrMsg(voiceErrorMessage(e.error));
+    };
+    recognition.onend = () => {
+      if (recognitionRef.current !== recognition) return;
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+
+    setErrMsg('');
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {
+      recognitionRef.current = null;
+      setErrMsg(voiceErrorMessage(String(err)));
+    }
+  }
+
+  function closeModal() {
+    stopVoice();
+    setIsModalOpen(false);
+  }
 
   function onChange(e: ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
@@ -219,6 +366,7 @@ export const Paste = () => {
   async function submit() {
     if (isLoading || sendingRef.current || !inputValue || status === 'error') return;
 
+    stopVoice();
     const segments = planPaste(inputValue, language);
     if (!segments) {
       setStatus('error');
@@ -302,7 +450,7 @@ export const Paste = () => {
         centered={false}
         title={t('keyboard.paste')}
         footer={null}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={closeModal}
         afterOpenChange={afterOpenChange}
       >
         <div className="flex items-center justify-between gap-2 pb-2">
@@ -346,15 +494,42 @@ export const Paste = () => {
           value={inputValue}
           status={status}
           showCount
-          maxLength={1024}
+          maxLength={maxLength}
           autoSize={{ minRows: 5, maxRows: 12 }}
           placeholder={t('keyboard.placeholder')}
+          readOnly={isListening}
           onChange={onChange}
         />
 
         {errMsg && <div className="pt-1 text-sm text-red-500">{errMsg}</div>}
 
-        <div className="flex justify-center py-3">
+        <div className="flex items-center justify-center gap-2 py-3">
+          {SpeechRecognitionImpl && (
+            <Space.Compact>
+              <Select
+                value={voiceLanguage}
+                options={voiceLanguages}
+                disabled={isListening}
+                onChange={setVoiceLanguage}
+              />
+              <Tooltip
+                title={
+                  !window.isSecureContext
+                    ? t('keyboard.voiceHttps')
+                    : isListening
+                      ? t('keyboard.voiceStop')
+                      : t('keyboard.voice')
+                }
+              >
+                <Button
+                  icon={<MicIcon size={16} className={clsx(isListening && 'animate-pulse')} />}
+                  danger={isListening}
+                  disabled={isLoading || !window.isSecureContext}
+                  onClick={toggleVoice}
+                />
+              </Tooltip>
+            </Space.Compact>
+          )}
           <Button type="primary" loading={isLoading} disabled={status === 'error'} htmlType="submit" onClick={submit}>
             {t('keyboard.submit')}
           </Button>

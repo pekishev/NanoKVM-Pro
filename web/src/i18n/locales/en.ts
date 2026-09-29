@@ -116,6 +116,12 @@ const en = {
       altShiftTip: 'Switch the input language',
       enterTip: 'Press Enter',
       switchFailed: 'Failed to switch the input language',
+      voice: 'Voice input',
+      voiceStop: 'Stop voice input',
+      voiceHttps: 'Voice input requires HTTPS',
+      voiceDenied: 'Microphone access denied',
+      voiceNetwork: 'Speech recognition service is unavailable',
+      voiceError: 'Speech recognition error: {{error}}',
       macro: {
         title: 'Macros',
         custom: 'Custom',
