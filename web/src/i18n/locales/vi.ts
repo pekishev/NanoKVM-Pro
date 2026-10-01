@@ -43,6 +43,7 @@ const vi = {
       qualityHigh: 'Cao',
       qualityMedium: 'Trung bình',
       qualityLow: 'Thấp',
+      rotation: 'Xoay',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -75,7 +76,9 @@ const vi = {
       mountDesc: 'Trong một số hệ thống, cần phải eject đĩa ảo trên máy remote trước khi mount.',
       unmountFailed: 'Gỡ bỏ thất bại',
       unmountDesc:
-        'Trong một số hệ thống, bạn cần phải tháo gỡ thủ công trên máy chủ từ xa trước khi gỡ bỏ ảnh.'
+        'Trong một số hệ thống, bạn cần phải tháo gỡ thủ công trên máy chủ từ xa trước khi gỡ bỏ ảnh.',
+      checksum: 'Tổng kiểm tra',
+      checksumFailed: 'Không thể tính tổng kiểm tra. Vui lòng thử lại.'
     },
     script: {
       title: 'Script',
@@ -148,6 +151,14 @@ const vi = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Lịch tắt màn hình',
+          description: 'Tắt màn hình Desk trong khoảng thời gian đã đặt',
+          start: 'Bắt đầu',
+          end: 'Kết thúc',
+          invalidRange: 'Thời gian bắt đầu và kết thúc phải khác nhau.',
+          saveFailed: 'Không thể lưu cài đặt lịch tắt màn hình.'
         },
         wifi: {
           title: 'Wi-Fi',

@@ -36,6 +36,7 @@ const pl = {
       qualityHigh: 'Wysoki',
       qualityMedium: 'Średni',
       qualityLow: 'Niski',
+      rotation: 'Obrót',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -68,7 +69,9 @@ const pl = {
         'W niektórych systemach wymagane jest wyjęcie dysku wirtualnego na zdalnym hoście przed zamontowaniem obrazu.',
       unmountFailed: 'Odmontowanie nie powiodło się',
       unmountDesc:
-        'W niektórych systemach należy ręcznie wysunąć obraz na hoście zdalnym przed odmontowaniem.'
+        'W niektórych systemach należy ręcznie wysunąć obraz na hoście zdalnym przed odmontowaniem.',
+      checksum: 'Suma kontrolna',
+      checksumFailed: 'Obliczanie sumy kontrolnej nie powiodło się. Spróbuj ponownie.'
     },
     script: {
       title: 'Skrypty',
@@ -151,6 +154,14 @@ const pl = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Harmonogram wyłączania ekranu',
+          description: 'Wyłączaj ekran Desk w określonych godzinach',
+          start: 'Początek',
+          end: 'Koniec',
+          invalidRange: 'Godziny rozpoczęcia i zakończenia muszą się różnić.',
+          saveFailed: 'Nie udało się zapisać ustawień harmonogramu wyłączania ekranu.'
         },
         wifi: {
           title: 'Wi-Fi',

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var updateHTTP = &http.Client{Timeout: 20 * time.Second}
+const forkReleasesTimeout = 20 * time.Second
 
 type ForkRelease struct {
 	Version string
@@ -35,14 +36,17 @@ type ghAsset struct {
 }
 
 func getForkLatest() (*ForkRelease, error) {
-	req, err := http.NewRequest(http.MethodGet, forkReleasesURL, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), forkReleasesTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, forkReleasesURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", updateUserAgent)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := updateHTTP.Do(req)
+	resp, err := updateHTTPClient.Do(req)
 	if err != nil {
 		log.Errorf("failed to get fork releases: %v", err)
 		return nil, err
@@ -143,21 +147,14 @@ func installFork(rel *ForkRelease) error {
 		return fmt.Errorf("fork release is empty")
 	}
 
-	if err := os.RemoveAll(TempDir); err != nil {
-		log.Errorf("failed to clean %s: %v", TempDir, err)
+	workspace, err := newOnlineUpdateWorkspace()
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(TempDir, 0o755); err != nil {
-		log.Errorf("failed to create dir %s: %v", TempDir, err)
-		return err
-	}
+	defer func() { _ = os.RemoveAll(workspace) }()
 
 	_ = sendMessage("download", 0)
-	name := filepath.Base(rel.Name)
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		name = "release.tar.gz"
-	}
-	archivePath := filepath.Join(TempDir, name)
+	archivePath := filepath.Join(workspace, "release.tar.gz")
 	if err := download(rel.URL, archivePath); err != nil {
 		log.Errorf("download fork release failed: %s", err)
 		return err
@@ -169,7 +166,7 @@ func installFork(rel *ForkRelease) error {
 		}
 	}
 
-	extractDir := filepath.Join(TempDir, "release")
+	extractDir := filepath.Join(workspace, "release")
 	if err := extractRelease(archivePath, extractDir); err != nil {
 		log.Errorf("failed to extract fork release: %s", err)
 		return err

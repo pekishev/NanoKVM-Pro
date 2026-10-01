@@ -53,6 +53,7 @@ const id = {
       qualityHigh: 'Tinggi',
       qualityMedium: 'Sedang',
       qualityLow: 'Rendah',
+      rotation: 'Rotasi',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -86,7 +87,9 @@ const id = {
         'Di beberapa sistem, perlu mengeluarkan disk virtual pada host jarak jauh sebelum memasang gambar.',
       unmountFailed: 'Pelepasan gagal',
       unmountDesc:
-        'Di beberapa sistem, Anda perlu mengeluarkan secara manual di host jarak jauh sebelum melepaskan gambar.'
+        'Di beberapa sistem, Anda perlu mengeluarkan secara manual di host jarak jauh sebelum melepaskan gambar.',
+      checksum: 'Checksum',
+      checksumFailed: 'Penghitungan checksum gagal. Silakan coba lagi.'
     },
     script: {
       title: 'Script',
@@ -159,6 +162,14 @@ const id = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Jadwal Mematikan Layar',
+          description: 'Matikan layar Desk selama rentang waktu tertentu',
+          start: 'Mulai',
+          end: 'Selesai',
+          invalidRange: 'Waktu mulai dan selesai harus berbeda.',
+          saveFailed: 'Tidak dapat menyimpan pengaturan jadwal mematikan layar.'
         },
         wifi: {
           title: 'Wi-Fi',

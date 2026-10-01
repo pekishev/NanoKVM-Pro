@@ -58,7 +58,14 @@ const en = {
       invalidMode:
         'The current mode does not support network setup. Please go to your device and enable Wi-Fi configuration mode.',
       confirmBtn: 'Ok',
-      finishBtn: 'Finished'
+      finishBtn: 'Finished',
+      ap: {
+        authTitle: 'Authentication Required',
+        authDescription: 'Please enter the AP password to continue',
+        authFailed: 'Invalid AP password',
+        passPlaceholder: 'AP password',
+        verifyBtn: 'Verify',
+      }
     },
     notification: {
       browser: {
@@ -86,6 +93,7 @@ const en = {
       qualityMedium: 'Medium',
       qualityLow: 'Low',
       scale: 'Scale',
+      rotation: 'Rotation',
       resetHdmi: 'Reset HDMI',
       noSignal: 'HDMI no signal',
       inconsistentVideoMode: 'Play paused. Another video mode is playing.',
@@ -207,6 +215,8 @@ const en = {
       unmountFailed: 'Unmount failed',
       unmountDesc:
         'On some systems, you need to manually eject from the remote host before unmounting the image.',
+      checksum: 'Checksum',
+      checksumFailed: 'Checksum calculation failed, please try again',
       refresh: 'Refresh the image list',
       download: 'Download Image',
       attention: 'Attention',
@@ -383,6 +393,24 @@ const en = {
           1800: '30 min',
           3600: '1 hour'
         },
+        scheduledScreenOff: {
+          title: 'Scheduled Screen Off',
+          description: 'Turn the Desk screen off during a time range',
+          start: 'Start',
+          end: 'End',
+          invalidRange: 'Start and end times must be different.',
+          saveFailed: 'Unable to save the scheduled screen-off settings.'
+        },
+        displayPolicy: {
+          title: 'Desk screen',
+          description: 'Choose what the built-in screen shows while idle',
+          modes: {
+            alwaysOn: 'Always on',
+            idleClock: 'Show clock when idle',
+            idleOff: 'Turn off when idle'
+          },
+          saveFailed: 'Unable to save the screen display setting.'
+        },
         wifi: {
           title: 'Wi-Fi',
           description: 'Configure Wi-Fi',
@@ -530,8 +558,6 @@ const en = {
         check: 'Check for updates',
         checkDesc: 'Look for official and fork releases. When off, the device does not contact update servers.',
         checksDisabled: 'Update checks are turned off.',
-        uploadDesc: 'Upload a nanokvm-pro-*.tar.gz release archive. The device will restart after installation.',
-        chooseFile: 'Choose file',
         invalidFile: 'Choose a .tar.gz release archive up to 256 MB.',
         updating: 'Update started. Please wait...',
         confirm: 'Confirm',
@@ -549,7 +575,45 @@ const en = {
         install: 'Install',
         changelog: 'Changelog',
         forkReleases: 'Fork releases',
-        restart: 'Restart'
+        restart: 'Restart',
+        source: {
+          title: 'Update Server',
+          desc: 'Set one root URL for both application and system-firmware updates.',
+          loadFailed: 'Failed to load the update server configuration.',
+          saveFailed: 'Failed to save the update server.',
+          resetFailed: 'Failed to restore the official update server.',
+          saved: 'Update server saved.',
+          resetDone: 'Official update server restored.',
+          invalidUrl: 'Enter an HTTP(S) update server root without URL credentials or a manifest URL.',
+          save: 'Save',
+          reset: 'Restore Official Source',
+          confirmTitle: 'Use a custom update server?',
+          confirmDesc:
+            'This server controls the application and system-firmware update metadata used by this device. Only continue if you trust its operator.',
+          confirm: 'Use Custom Server',
+          resetConfirmTitle: 'Restore the official update server?',
+          resetConfirmDesc: 'Future update checks will use the official NanoKVM-Pro source again.',
+          resetConfirm: 'Restore Official Source',
+          httpWarning: 'HTTP does not protect update traffic in transit. You must also trust every network between this device and the update server.',
+          ready: 'Update source changed. Check for application updates when ready.',
+          previewDisabled: 'Preview Updates are unavailable while a custom update server is active.'
+        },
+        manual: {
+          title: 'Manual Update',
+          desc: 'Upload an application package, a supported system-firmware package or a nanokvm-pro-*.tar.gz fork release archive.',
+          upload: 'Upload Package',
+          inspectFailed: 'Failed to inspect the update package.',
+          installFailed: 'Failed to start the update installation.',
+          confirmTitle: 'Install update package?',
+          confirmDesc: 'The package was staged and inspected. Review its contents and risks before installation.',
+          forkConfirmDesc:
+            'This fork release archive replaces the server binary and the web interface, then restarts the service.',
+          install: 'Install Update',
+          version: 'Target version: {{version}}',
+          size: 'Package size: {{size}}',
+          finished: 'The update completed successfully.',
+          refresh: 'Refresh Page',
+        }
       },
       account: {
         title: 'Account',

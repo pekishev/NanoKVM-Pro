@@ -44,6 +44,7 @@ const it = {
       qualityHigh: 'Alto',
       qualityMedium: 'Medio',
       qualityLow: 'Basso',
+      rotation: 'Rotazione',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const it = {
         "In alcuni sistemi, è necessario espellere il disco virtuale sull'host remoto prima di montare l'immagine.",
       unmountFailed: 'Smontaggio fallito',
       unmountDesc:
-        "In alcuni sistemi, è necessario espellere manualmente sull'host remoto prima di smontare l'immagine."
+        "In alcuni sistemi, è necessario espellere manualmente sull'host remoto prima di smontare l'immagine.",
+      checksum: 'Checksum',
+      checksumFailed: 'Calcolo del checksum non riuscito. Riprova.'
     },
     script: {
       title: 'Script',
@@ -150,6 +153,14 @@ const it = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Spegnimento programmato dello schermo',
+          description: 'Spegni lo schermo Desk durante un intervallo di tempo',
+          start: 'Inizio',
+          end: 'Fine',
+          invalidRange: 'Gli orari di inizio e fine devono essere diversi.',
+          saveFailed: 'Impossibile salvare le impostazioni di spegnimento programmato dello schermo.'
         },
         wifi: {
           title: 'Wi-Fi',

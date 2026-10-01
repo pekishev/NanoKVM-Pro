@@ -44,6 +44,7 @@ const nl = {
       qualityHigh: 'Hoog',
       qualityMedium: 'Gemiddeld',
       qualityLow: 'Laag',
+      rotation: 'Rotatie',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const nl = {
         'In sommige systemen is het noodzakelijk om de virtuele schijf op de externe host uit te werpen voordat het image wordt gekoppeld.',
       unmountFailed: 'Ontkoppelen mislukt',
       unmountDesc:
-        'In sommige systemen moet u handmatig uitwerpen op de externe host voordat u de image ontkoppelt.'
+        'In sommige systemen moet u handmatig uitwerpen op de externe host voordat u de image ontkoppelt.',
+      checksum: 'Controlesom',
+      checksumFailed: 'Berekenen van controlesom mislukt. Probeer opnieuw.'
     },
     script: {
       title: 'Script',
@@ -150,6 +153,14 @@ const nl = {
           600: '10 min',
           1800: '30 min',
           3600: '1 uur'
+        },
+        scheduledScreenOff: {
+          title: 'Geplande schermuitschakeling',
+          description: 'Schakel het scherm van Desk uit gedurende een bepaalde periode',
+          start: 'Start',
+          end: 'Einde',
+          invalidRange: 'De begin- en eindtijd moeten verschillend zijn.',
+          saveFailed: 'Kan de instellingen voor geplande schermuitschakeling niet opslaan.'
         },
         wifi: {
           title: 'Wifi',

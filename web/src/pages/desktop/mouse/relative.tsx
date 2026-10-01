@@ -4,9 +4,15 @@ import { getDefaultStore, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 import { MouseReportRelative } from '@/lib/mouse.ts';
-import { client, MessageEvent } from '@/lib/websocket.ts';
+import { getScreenElement, inverseRotateDelta } from '@/lib/video-transform.ts';
 import { isMacroPlayingAtom, scrollDirectionAtom, scrollIntervalAtom } from '@/jotai/mouse.ts';
+import { videoModeAtom, videoParametersAtom } from '@/jotai/screen.ts';
 
+import {
+  registerMouseReleaseHandler,
+  sendMouseRelease,
+  sendMouseReport
+} from './lifecycle.ts';
 import { MouseRelativeEvent } from './types.ts';
 
 export const Relative = () => {
@@ -15,46 +21,15 @@ export const Relative = () => {
 
   const scrollDirection = useAtomValue(scrollDirectionAtom);
   const scrollInterval = useAtomValue(scrollIntervalAtom);
+  const videoMode = useAtomValue(videoModeAtom);
+  const videoParameters = useAtomValue(videoParametersAtom);
 
   const mouseRef = useRef(new MouseReportRelative());
   const isLockedRef = useRef(false);
   const lastScrollTimeRef = useRef(0);
 
-  // Mouse handler
-  function handleMouseEvent(event: MouseRelativeEvent) {
-    if (getDefaultStore().get(isMacroPlayingAtom)) {
-      return;
-    }
-
-    let report: Uint8Array;
-    const mouse = mouseRef.current;
-
-    switch (event.type) {
-      case 'mousedown':
-        mouse.buttonDown(event.button);
-        report = mouse.buildButtonReport();
-        break;
-      case 'mouseup':
-        mouse.buttonUp(event.button);
-        report = mouse.buildButtonReport();
-        break;
-      case 'wheel':
-        report = mouse.buildReport(0, 0, event.deltaY);
-        break;
-      case 'move':
-        report = mouse.buildReport(event.deltaX, event.deltaY);
-        break;
-      default:
-        report = mouse.buildReport(0, 0);
-        break;
-    }
-
-    const data = new Uint8Array([MessageEvent.Mouse, ...report]);
-    client.send(data);
-  }
-
   useEffect(() => {
-    const screen = document.getElementById('screen');
+    const screen = getScreenElement();
     if (!screen) return;
 
     showMessage();
@@ -64,8 +39,51 @@ export const Relative = () => {
     screen.addEventListener('mouseup', handleMouseUp);
     screen.addEventListener('mousemove', handleMouseMove);
     screen.addEventListener('wheel', handleMouseWheel, { passive: false });
-    screen.addEventListener('contextmenu', (e) => e.preventDefault());
+    screen.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('pointerlockchange', handlePointerLockChange);
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const unregisterMouseReleaseHandler = registerMouseReleaseHandler(releaseMouseAndExitPointerLock);
+
+    // Mouse event handler: keep local button state even when movement reports are separate.
+    function handleMouseEvent(event: MouseRelativeEvent) {
+      if (getDefaultStore().get(isMacroPlayingAtom)) {
+        return;
+      }
+
+      let report: Uint8Array;
+      const mouse = mouseRef.current;
+
+      switch (event.type) {
+        case 'mousedown':
+          mouse.buttonDown(event.button);
+          report = mouse.buildButtonReport();
+          break;
+        case 'mouseup':
+          mouse.buttonUp(event.button);
+          report = mouse.buildButtonReport();
+          break;
+        case 'wheel':
+          report = mouse.buildReport(0, 0, event.deltaY);
+          break;
+        case 'move':
+          report = mouse.buildReport(event.deltaX, event.deltaY);
+          break;
+        default:
+          report = mouse.buildReport(0, 0);
+          break;
+      }
+
+      const sent = sendMouseReport('relative', report);
+      if (!sent && (event.type === 'mouseup' || mouse.hasPressedButtons)) {
+        releaseMouse(true);
+      }
+    }
+
+    function handleContextMenu(event: Event) {
+      event.preventDefault();
+    }
 
     // Mouse click event
     function handleMouseClick(event: MouseEvent) {
@@ -98,8 +116,9 @@ export const Relative = () => {
 
       const deltaX = Math.abs(x * window.devicePixelRatio) < 10 ? x * 2 : x;
       const deltaY = Math.abs(y * window.devicePixelRatio) < 10 ? y * 2 : y;
+      const delta = inverseRotateDelta(deltaX, deltaY, videoParameters.rotation);
 
-      handleMouseEvent({ type: 'move', deltaX, deltaY });
+      handleMouseEvent({ type: 'move', deltaX: delta.x, deltaY: delta.y });
     }
 
     // Mouse wheel event
@@ -121,19 +140,63 @@ export const Relative = () => {
     }
 
     function handlePointerLockChange() {
-      isLockedRef.current = document.pointerLockElement === screen;
+      const wasLocked = isLockedRef.current;
+      const isLocked = document.pointerLockElement === screen;
+      isLockedRef.current = isLocked;
+
+      // Esc/browser policy can drop pointer lock without delivering the matching mouseup.
+      if (wasLocked && !isLocked) {
+        releaseMouse();
+      }
+    }
+
+    function handleWindowBlur() {
+      releaseMouseAndExitPointerLock();
+    }
+
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        releaseMouseAndExitPointerLock();
+      }
+    }
+
+    function releaseMouse(force = false) {
+      const mouse = mouseRef.current;
+      const hadPressedButtons = mouse.hasPressedButtons;
+      const report = mouse.reset();
+      lastScrollTimeRef.current = 0;
+
+      // Local state is reset immediately; lifecycle.ts retains remote release on send failure.
+      if (hadPressedButtons || force) {
+        sendMouseRelease('relative', report);
+      }
+    }
+
+    function releaseMouseAndExitPointerLock() {
+      releaseMouse();
+
+      if (document.pointerLockElement === screen) {
+        document.exitPointerLock();
+      }
+
+      isLockedRef.current = false;
     }
 
     return () => {
+      releaseMouseAndExitPointerLock();
+      unregisterMouseReleaseHandler();
+
       screen.removeEventListener('click', handleMouseClick);
       screen.removeEventListener('mousemove', handleMouseMove);
       screen.removeEventListener('mousedown', handleMouseDown);
       screen.removeEventListener('mouseup', handleMouseUp);
       screen.removeEventListener('wheel', handleMouseWheel);
-      screen.removeEventListener('contextmenu', disableEvent);
+      screen.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [scrollDirection, scrollInterval]);
+  }, [scrollDirection, scrollInterval, videoMode, videoParameters.rotation]);
 
   // show message
   function showMessage() {

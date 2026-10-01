@@ -44,6 +44,7 @@ const cz = {
       qualityHigh: 'Vysoký',
       qualityMedium: 'Střední',
       qualityLow: 'Nízký',
+      rotation: 'Otočení',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const cz = {
         'V některých systémech je nutné před připojením obrazu vysunout virtuální disk na vzdáleném hostiteli.',
       unmountFailed: 'Odpojení selhalo',
       unmountDesc:
-        'V některých systémech je nutné před odpojením ručně vysunout obraz na vzdáleném hostiteli.'
+        'V některých systémech je nutné před odpojením ručně vysunout obraz na vzdáleném hostiteli.',
+      checksum: 'Kontrolní součet',
+      checksumFailed: 'Nepodařilo se vypočítat kontrolní součet. Zkuste to znovu.'
     },
     script: {
       title: 'Skript',
@@ -150,6 +153,14 @@ const cz = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Naplánované vypnutí obrazovky',
+          description: 'Vypnout obrazovku Desk v zadaném časovém rozmezí',
+          start: 'Začátek',
+          end: 'Konec',
+          invalidRange: 'Čas začátku a konce se musí lišit.',
+          saveFailed: 'Nastavení plánovaného vypnutí obrazovky se nepodařilo uložit.'
         },
         wifi: {
           title: 'Wi-Fi',

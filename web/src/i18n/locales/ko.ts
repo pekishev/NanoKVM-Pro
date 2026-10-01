@@ -43,6 +43,7 @@ const ko = {
       qualityHigh: '높음',
       qualityMedium: '중간',
       qualityLow: '낮음',
+      rotation: '회전',
       resetHdmi: 'HDMI 초기화'
     },
     keyboard: {
@@ -76,6 +77,8 @@ const ko = {
       unmountFailed: '마운트 해제 실패',
       unmountDesc:
         '일부 시스템에서는 이미지를 마운트 해제하기 전에 원격 호스트에서 수동으로 꺼내야 합니다.',
+      checksum: '체크섬',
+      checksumFailed: '체크섬 계산에 실패했습니다. 다시 시도해 주세요.',
       refresh: '이미지 목록 새로고침'
     },
     script: {
@@ -162,6 +165,14 @@ const ko = {
           600: '10분',
           1800: '30분',
           3600: '1시간'
+        },
+        scheduledScreenOff: {
+          title: '화면 끄기 예약',
+          description: '지정한 시간 동안 Desk 화면을 끕니다',
+          start: '시작',
+          end: '종료',
+          invalidRange: '시작 시간과 종료 시간은 달라야 합니다.',
+          saveFailed: '화면 끄기 예약 설정을 저장할 수 없습니다.'
         },
         wifi: {
           title: 'Wi-Fi',

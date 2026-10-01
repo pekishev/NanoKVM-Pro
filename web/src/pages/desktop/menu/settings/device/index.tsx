@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Advanced } from './advanced';
 import { Datetime } from './datetime';
+import { DisplayPolicy } from './display-policy.tsx';
 import { HdmiCapture } from './hdmi-capture.tsx';
 import { HdmiPassthrough } from './hdmi-passthrough.tsx';
 import { LedStrip } from './led-strip.tsx';
@@ -10,6 +11,7 @@ import { Mdns } from './mdns.tsx';
 import { MouseJiggler } from './mouse-jiggler.tsx';
 import { Oled } from './oled.tsx';
 import { Reboot } from './reboot.tsx';
+import { ScheduledScreenOff } from './scheduled-screen-off.tsx';
 import { Ssh } from './ssh.tsx';
 import { VirtualDevices } from './virtual-devices';
 import { Wifi } from './wifi.tsx';
@@ -33,6 +35,8 @@ export const Device = () => {
         <Divider className="opacity-50" />
 
         <Oled />
+        <DisplayPolicy />
+        <ScheduledScreenOff />
         <Wifi />
         <MouseJiggler />
         <LedStrip />

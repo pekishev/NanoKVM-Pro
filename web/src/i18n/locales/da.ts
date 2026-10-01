@@ -43,6 +43,7 @@ const da = {
       qualityHigh: 'Høj',
       qualityMedium: 'Mellem',
       qualityLow: 'Lav',
+      rotation: 'Rotation',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -75,7 +76,9 @@ const da = {
         'På nogle systemer kan det være nødvendigt at skubbe den virtuelle disk ud på fjerncomputeren før du kan montere diskbilledet.',
       unmountFailed: 'Afmontering mislykkedes',
       unmountDesc:
-        'I nogle systemer skal du manuelt eje afbryde på fjernværten, før du afmonterer billedet.'
+        'I nogle systemer skal du manuelt eje afbryde på fjernværten, før du afmonterer billedet.',
+      checksum: 'Kontrolsum',
+      checksumFailed: 'Beregning af kontrolsum mislykkedes. Prøv igen.'
     },
     script: {
       title: 'Script',
@@ -155,6 +158,14 @@ const da = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Planlagt slukning af skærmen',
+          description: 'Sluk Desk-skærmen i et angivet tidsrum',
+          start: 'Start',
+          end: 'Slut',
+          invalidRange: 'Start- og sluttidspunkt skal være forskellige.',
+          saveFailed: 'Indstillingerne for planlagt slukning af skærmen kunne ikke gemmes.'
         },
         wifi: {
           title: 'Wi-Fi',

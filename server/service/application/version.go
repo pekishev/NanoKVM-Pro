@@ -3,11 +3,11 @@ package application
 import (
 	"NanoKVM-Server/proto"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,14 +16,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Latest is the bounded manifest data needed to locate and verify an update.
 type Latest struct {
 	Version string `json:"version"`
 	Name    string `json:"name"`
 	Sha512  string `json:"sha512"`
-	Size    uint   `json:"size"`
+	Size    uint64 `json:"size"`
 	Url     string `json:"url"`
 }
 
+const maxUpdateManifestBytes = 64 << 10
+
+var latestApplicationNamePattern = regexp.MustCompile(`^nanokvm_pro_([A-Za-z0-9][A-Za-z0-9._+-]{0,127})\.tar\.gz$`)
+
+// GetVersion reports the installed version and the latest version from the
+// currently selected source.
 func (s *Service) GetVersion(c *gin.Context) {
 	var rsp proto.Response
 
@@ -38,7 +45,12 @@ func (s *Service) GetVersion(c *gin.Context) {
 		return
 	}
 
-	choice := resolveUpdate(currentVersion)
+	choice, err := resolveUpdate(currentVersion)
+	if err != nil {
+		log.Errorf("failed to query custom update source: %v", err)
+		rsp.ErrRsp(c, -1, "failed to query update source")
+		return
+	}
 
 	rsp.OkRspWithData(c, &proto.GetVersionRsp{
 		Current:  currentVersion,
@@ -55,8 +67,21 @@ type updateChoice struct {
 	Fork    *ForkRelease
 }
 
-func resolveUpdate(current string) updateChoice {
-	official, fork := fetchCandidates()
+// resolveUpdate picks the newest of the selected source and the fork releases.
+// It fails only when a custom source is configured and cannot be queried, so
+// a broken custom source is reported instead of silently falling back.
+func resolveUpdate(current string) (updateChoice, error) {
+	official, fork, officialErr := fetchCandidates()
+	if officialErr != nil {
+		cfg, cfgErr := loadUpdateSourceConfig()
+		if cfgErr != nil {
+			return updateChoice{}, cfgErr
+		}
+		if cfg.Enabled {
+			return updateChoice{}, officialErr
+		}
+	}
+
 	forkVersion := ""
 	if fork != nil {
 		forkVersion = fork.Version
@@ -68,14 +93,15 @@ func resolveUpdate(current string) updateChoice {
 		choice.Fork = fork
 	}
 
-	return choice
+	return choice, nil
 }
 
-func fetchCandidates() (string, *ForkRelease) {
+func fetchCandidates() (string, *ForkRelease, error) {
 	var (
-		wg       sync.WaitGroup
-		official string
-		fork     *ForkRelease
+		wg          sync.WaitGroup
+		official    string
+		officialErr error
+		fork        *ForkRelease
 	)
 
 	wg.Add(2)
@@ -83,6 +109,7 @@ func fetchCandidates() (string, *ForkRelease) {
 		defer wg.Done()
 		latest, err := getLatest()
 		if err != nil {
+			officialErr = err
 			return
 		}
 		official = latest.Version
@@ -97,9 +124,10 @@ func fetchCandidates() (string, *ForkRelease) {
 	}()
 	wg.Wait()
 
-	return official, fork
+	return official, fork, officialErr
 }
 
+// getCurrentVersion reads the version exposed by the installed application.
 func getCurrentVersion() string {
 	defaultVersion := "v1.0.0"
 
@@ -118,37 +146,18 @@ func getCurrentVersion() string {
 }
 
 func getLatest() (*Latest, error) {
-	baseURL := StableURL
-	if isPreviewEnabled() {
-		baseURL = PreviewURL
-	}
-
-	url := fmt.Sprintf("%s/nanokvm_pro_latest.json?now=%d", baseURL, time.Now().Unix())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	// The configured source is resolved for each check so resetting the source
+	// takes effect without restarting the service.
+	baseURL, err := resolveApplicationUpdateBaseURL()
 	if err != nil {
-		log.Errorf("failed to get latest version: %v", err)
-		return nil, err
-	}
-	req.Header.Set("User-Agent", updateUserAgent)
-
-	resp, err := updateHTTP.Do(req)
-	if err != nil {
-		log.Errorf("failed to get latest version: %v", err)
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("failed to read response: %v", err)
 		return nil, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Errorf("server responded with status code: %d", resp.StatusCode)
-		return nil, fmt.Errorf("status code %d", resp.StatusCode)
+	manifestURL := joinUpdateURL(baseURL, "nanokvm_pro_latest.json") + "?now=" + strconv.FormatInt(time.Now().Unix(), 10)
+	body, err := readUpdateManifest(manifestURL, maxUpdateManifestBytes)
+	if err != nil {
+		log.Errorf("failed to read latest version manifest: %v", err)
+		return nil, err
 	}
 
 	var latest Latest
@@ -156,9 +165,28 @@ func getLatest() (*Latest, error) {
 		log.Errorf("failed to unmarshal response: %s", err)
 		return nil, err
 	}
+	if err := validateLatest(&latest); err != nil {
+		return nil, err
+	}
 
-	latest.Url = fmt.Sprintf("%s/%s", baseURL, latest.Name)
+	latest.Url = joinUpdateURL(baseURL, latest.Name)
 
 	log.Debugf("get application latest version: %s", latest.Version)
 	return &latest, nil
+}
+
+func validateLatest(latest *Latest) error {
+	// Validate names and hashes before constructing a download URL from a
+	// manifest supplied by either the official or a custom source.
+	if latest == nil || !validArtifactVersion(latest.Version) {
+		return errors.New("invalid application update version")
+	}
+	matches := latestApplicationNamePattern.FindStringSubmatch(latest.Name)
+	if len(matches) != 2 || matches[1] != latest.Version {
+		return errors.New("invalid application update package name")
+	}
+	if err := validateSHA512String(latest.Sha512); err != nil {
+		return errors.New("invalid application update checksum")
+	}
+	return nil
 }

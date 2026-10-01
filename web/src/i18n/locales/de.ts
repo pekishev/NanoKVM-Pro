@@ -45,6 +45,7 @@ const de = {
       qualityHigh: 'Hoch',
       qualityMedium: 'Mittel',
       qualityLow: 'Niedrig',
+      rotation: 'Drehung',
       resetHdmi: 'HDMI zurücksetzen'
     },
     keyboard: {
@@ -92,6 +93,8 @@ const de = {
       unmountFailed: 'Aushängen fehlgeschlagen',
       unmountDesc:
         'In einigen Systemen muss das Abbild auf dem Remote-Host manuell ausgeworfen werden, bevor es ausgehängt wird.',
+      checksum: 'Prüfsumme',
+      checksumFailed: 'Prüfsummenberechnung fehlgeschlagen. Bitte erneut versuchen.',
       refresh: 'Bilder aktualisieren'
     },
     script: {
@@ -204,6 +207,14 @@ const de = {
           600: '10 Min',
           1800: '30 Min',
           3600: '1 Stunde'
+        },
+        scheduledScreenOff: {
+          title: 'Geplante Bildschirmabschaltung',
+          description: 'Den Desk-Bildschirm während eines Zeitraums ausschalten',
+          start: 'Start',
+          end: 'Ende',
+          invalidRange: 'Start- und Endzeit müssen unterschiedlich sein.',
+          saveFailed: 'Die Einstellungen für die geplante Bildschirmabschaltung konnten nicht gespeichert werden.'
         },
         wifi: {
           title: 'Wi-Fi',

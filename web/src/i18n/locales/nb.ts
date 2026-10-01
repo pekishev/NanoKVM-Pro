@@ -44,6 +44,7 @@ const nb = {
       qualityHigh: 'Høy',
       qualityMedium: 'Medium',
       qualityLow: 'Lav',
+      rotation: 'Rotasjon',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -76,7 +77,9 @@ const nb = {
         'På noen systemer er det nødvendig å koble fra den virtuelle disken på den eksterne verten før man kan montere arkivfilen.',
       unmountFailed: 'Avmontering feilet',
       unmountDesc:
-        'I noen systemer må du manuelt kaste ut på den eksterne verten før du avmonterer bildet.'
+        'I noen systemer må du manuelt kaste ut på den eksterne verten før du avmonterer bildet.',
+      checksum: 'Kontrollsum',
+      checksumFailed: 'Beregning av kontrollsum mislyktes. Prøv igjen.'
     },
     script: {
       title: 'Skript',
@@ -149,6 +152,14 @@ const nb = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Planlagt avslåing av skjermen',
+          description: 'Slå av skjermen på Desk i et bestemt tidsrom',
+          start: 'Start',
+          end: 'Slutt',
+          invalidRange: 'Start- og sluttidspunkt må være forskjellige.',
+          saveFailed: 'Kunne ikke lagre innstillingene for planlagt avslåing av skjermen.'
         },
         wifi: {
           title: 'Wi-Fi',

@@ -45,6 +45,7 @@ const fr = {
       qualityHigh: 'Élevé',
       qualityMedium: 'Moyen',
       qualityLow: 'Bas',
+      rotation: 'Rotation',
       resetHdmi: 'Réinitialiser le HDMI'
     },
     keyboard: {
@@ -78,7 +79,9 @@ const fr = {
         "Dans certains systèmes, il est nécessaire de déséjecter le disque virtuel sur l'hôte distant avant de monter l'image.",
       unmountFailed: 'Démontage échoué',
       unmountDesc:
-        "Dans certains systèmes, vous devez éjecter manuellement sur l'hôte distant avant de démonter l'image."
+        "Dans certains systèmes, vous devez éjecter manuellement sur l'hôte distant avant de démonter l'image.",
+      checksum: 'Somme de contrôle',
+      checksumFailed: 'Échec du calcul de la somme de contrôle. Veuillez réessayer.'
     },
     script: {
       title: 'Script',
@@ -157,6 +160,14 @@ const fr = {
           600: '10 min',
           1800: '30 min',
           3600: '1 heure'
+        },
+        scheduledScreenOff: {
+          title: 'Extinction programmée de l’écran',
+          description: 'Éteindre l’écran Desk pendant une plage horaire',
+          start: 'Début',
+          end: 'Fin',
+          invalidRange: 'Les heures de début et de fin doivent être différentes.',
+          saveFailed: 'Impossible d’enregistrer les paramètres d’extinction programmée de l’écran.'
         },
         wifi: {
           title: 'Wi-Fi',

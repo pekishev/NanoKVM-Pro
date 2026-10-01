@@ -8,9 +8,16 @@ import * as api from '@/api/application.ts';
 type PreviewProps = {
   checkForUpdates: () => void;
   checksEnabled?: boolean;
+  disabled?: boolean;
 };
 
-export const Preview = ({ checkForUpdates, checksEnabled = true }: PreviewProps) => {
+// Preview updates remain available for official sources and are disabled while
+// a custom source is active because that source has no preview-root contract.
+export const Preview = ({
+  checkForUpdates,
+  checksEnabled = true,
+  disabled = false
+}: PreviewProps) => {
   const { t } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +46,7 @@ export const Preview = ({ checkForUpdates, checksEnabled = true }: PreviewProps)
   }
 
   function setPreviewUpdates() {
-    if (isLoading) return;
+    if (isLoading || disabled) return;
     setIsLoading(true);
 
     const enable = !isEnabled;
@@ -78,10 +85,12 @@ export const Preview = ({ checkForUpdates, checksEnabled = true }: PreviewProps)
           </Tooltip>
         </div>
 
-        <span className="text-xs text-neutral-500">{t('settings.update.previewDesc')}</span>
+        <span className="text-xs text-neutral-500">
+          {disabled ? t('settings.update.source.previewDisabled') : t('settings.update.previewDesc')}
+        </span>
       </div>
 
-      <Switch checked={isEnabled} loading={isLoading} onChange={setPreviewUpdates} />
+      <Switch checked={isEnabled} loading={isLoading} disabled={disabled} onChange={setPreviewUpdates} />
     </div>
   );
 };

@@ -42,6 +42,7 @@ const zh_tw = {
       qualityHigh: '高',
       qualityMedium: '中',
       qualityLow: '低',
+      rotation: '旋轉',
       resetHdmi: '重置 HDMI'
     },
     keyboard: {
@@ -72,7 +73,9 @@ const zh_tw = {
       mountFailed: '掛載失敗',
       mountDesc: '在某些系統中，在掛載映像之前需要中斷遠端主機上的虛擬磁碟。',
       unmountFailed: '卸載失敗',
-      unmountDesc: '在某些系統中，需要在遠端主機中手動彈出後再卸載映像。'
+      unmountDesc: '在某些系統中，需要在遠端主機中手動彈出後再卸載映像。',
+      checksum: '校驗碼',
+      checksumFailed: '計算校驗碼失敗，請重試。'
     },
     script: {
       title: '腳本',
@@ -153,6 +156,14 @@ const zh_tw = {
           3600: '1小時'
         },
 
+        scheduledScreenOff: {
+          title: '定時關閉螢幕',
+          description: '在指定時段內關閉 Desk 螢幕',
+          start: '開始',
+          end: '結束',
+          invalidRange: '開始時間與結束時間不可相同。',
+          saveFailed: '無法儲存定時關閉螢幕設定。'
+        },
         wifi: {
           title: 'Wi-Fi',
           description: '設定 Wi-Fi'

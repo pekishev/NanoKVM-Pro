@@ -44,6 +44,7 @@ const en = {
       qualityHigh: 'Alto',
       qualityMedium: 'Medio',
       qualityLow: 'Bajo',
+      rotation: 'Rotación',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const en = {
         'En algunos sistemas, es necesario expulsar el disco virtual en el host remoto antes de montar una imagen.',
       unmountFailed: 'Desmontaje fallido',
       unmountDesc:
-        'En algunos sistemas, es necesario expulsar manualmente en el host remoto antes de desmontar la imagen.'
+        'En algunos sistemas, es necesario expulsar manualmente en el host remoto antes de desmontar la imagen.',
+      checksum: 'Suma de comprobación',
+      checksumFailed: 'Error al calcular la suma de comprobación. Inténtalo de nuevo.'
     },
     script: {
       title: 'Script',
@@ -157,6 +160,14 @@ const en = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Apagado programado de la pantalla',
+          description: 'Apagar la pantalla de Desk durante un intervalo de tiempo',
+          start: 'Inicio',
+          end: 'Fin',
+          invalidRange: 'Las horas de inicio y fin deben ser distintas.',
+          saveFailed: 'No se pudo guardar la configuración del apagado programado de la pantalla.'
         },
         wifi: {
           title: 'Wi-Fi',

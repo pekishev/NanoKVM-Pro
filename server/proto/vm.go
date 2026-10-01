@@ -97,6 +97,46 @@ type SetLcdTimeFormatReq struct {
 	Format string `json:"format" validate:"required"`
 }
 
+type GetLcdScreenOffRsp struct {
+	Supported   bool `json:"supported"`
+	Enabled     bool `json:"enabled"`
+	StartMinute int  `json:"startMinute"`
+	EndMinute   int  `json:"endMinute"`
+}
+
+type SetLcdScreenOffReq struct {
+	Enabled     *bool `json:"enabled"`
+	StartMinute *int  `json:"startMinute"`
+	EndMinute   *int  `json:"endMinute"`
+}
+
+type LcdDisplaySchedule struct {
+	Supported          bool `json:"supported"`
+	Enabled            bool `json:"enabled"`
+	StartMinute        int  `json:"startMinute"`
+	EndMinute          int  `json:"endMinute"`
+	WakeTimeoutSeconds int  `json:"wakeTimeoutSeconds,omitempty"`
+}
+
+type GetLcdDisplayPolicyRsp struct {
+	ScreenType         string             `json:"screenType"`
+	SupportedModes     []string           `json:"supportedModes"`
+	Mode               string             `json:"mode,omitempty"`
+	ModeTimeoutSeconds map[string]int     `json:"modeTimeoutSeconds,omitempty"`
+	Schedule           LcdDisplaySchedule `json:"schedule"`
+}
+
+type SetLcdDisplayPolicyReq struct {
+	Mode     *string                `json:"mode"`
+	Schedule *SetLcdDisplaySchedule `json:"schedule"`
+}
+
+type SetLcdDisplaySchedule struct {
+	Enabled     *bool `json:"enabled"`
+	StartMinute *int  `json:"startMinute"`
+	EndMinute   *int  `json:"endMinute"`
+}
+
 type GetSSHStateRsp struct {
 	Enabled bool `json:"enabled"`
 }

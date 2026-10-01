@@ -30,20 +30,12 @@ const (
 func (s *Service) Upload(c *gin.Context) {
 	var rsp proto.Response
 
-	updateMutex.Lock()
-	if isUpdating {
-		updateMutex.Unlock()
-		rsp.ErrRsp(c, -1, "update already in progress")
+	releaseLock, err := acquireUpdate()
+	if err != nil {
+		rsp.ErrRsp(c, -1, err.Error())
 		return
 	}
-	isUpdating = true
-	updateMutex.Unlock()
-
-	defer func() {
-		updateMutex.Lock()
-		isUpdating = false
-		updateMutex.Unlock()
-	}()
+	defer releaseLock()
 
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxReleaseBytes)
 
@@ -61,25 +53,22 @@ func (s *Service) Upload(c *gin.Context) {
 		return
 	}
 
-	if err := os.RemoveAll(TempDir); err != nil {
-		log.Errorf("failed to clean %s: %v", TempDir, err)
+	workspace, err := newOnlineUpdateWorkspace()
+	if err != nil {
+		log.Errorf("failed to prepare update workspace: %v", err)
 		rsp.ErrRsp(c, -4, "failed to prepare update")
 		return
 	}
-	if err := os.MkdirAll(TempDir, 0o755); err != nil {
-		log.Errorf("failed to create %s: %v", TempDir, err)
-		rsp.ErrRsp(c, -4, "failed to prepare update")
-		return
-	}
+	defer func() { _ = os.RemoveAll(workspace) }()
 
-	archivePath := filepath.Join(TempDir, "release.tar.gz")
+	archivePath := filepath.Join(workspace, "release.tar.gz")
 	if err := saveUpload(file, archivePath); err != nil {
 		log.Errorf("failed to save release: %v", err)
 		rsp.ErrRsp(c, -5, "failed to save archive")
 		return
 	}
 
-	extractDir := filepath.Join(TempDir, "release")
+	extractDir := filepath.Join(workspace, "release")
 	if err := extractRelease(archivePath, extractDir); err != nil {
 		log.Errorf("failed to extract release: %v", err)
 		rsp.ErrRsp(c, -6, "invalid release archive")

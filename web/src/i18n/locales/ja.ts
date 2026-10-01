@@ -44,6 +44,7 @@ const ja = {
       qualityHigh: '高い',
       qualityMedium: '中くらい',
       qualityLow: '低い',
+      rotation: '回転',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const ja = {
         '一部のシステムでは、イメージをマウントする前にリモートホストで仮想ディスクをアンマウントする必要があります。',
       unmountFailed: 'アンマウント失敗',
       unmountDesc:
-        '一部のシステムでは、イメージをアンマウントする前にリモートホストで手動で取り出す必要があります。'
+        '一部のシステムでは、イメージをアンマウントする前にリモートホストで手動で取り出す必要があります。',
+      checksum: 'チェックサム',
+      checksumFailed: 'チェックサムの計算に失敗しました。もう一度お試しください。'
     },
     script: {
       title: 'スクリプト',
@@ -157,6 +160,14 @@ const ja = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: '画面オフのスケジュール',
+          description: '指定した時間帯に Desk の画面をオフにします',
+          start: '開始',
+          end: '終了',
+          invalidRange: '開始時刻と終了時刻は異なる時刻にしてください。',
+          saveFailed: '画面オフのスケジュール設定を保存できませんでした。'
         },
         wifi: {
           title: 'Wi-Fi',

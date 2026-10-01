@@ -43,7 +43,14 @@ const zh = {
       failed: '操作失败，请重试。',
       invalidMode: '当前模式不支持配置网络。请先前往设备启用 Wi-Fi 配置模式。',
       confirmBtn: '确定',
-      finishBtn: '完成'
+      finishBtn: '完成',
+      ap: {
+        authTitle: '身份验证',
+        authDescription: '请输入 AP 密码以继续',
+        authFailed: '密码错误',
+        passPlaceholder: 'AP 密码',
+        verifyBtn: '验证',
+      }
     },
     notification: {
       browser: {
@@ -72,6 +79,7 @@ const zh = {
       qualityMedium: '中',
       qualityLow: '低',
       scale: '缩放',
+      rotation: '旋转',
       resetHdmi: '重置 HDMI',
       noSignal: 'HDMI 无信号',
       inconsistentVideoMode: '已暂停，其他视频模式正在播放中',
@@ -186,6 +194,8 @@ const zh = {
       mountDesc: '在某些系统中，需要在远程主机中弹出虚拟硬盘后再挂载镜像。',
       unmountFailed: '卸载失败',
       unmountDesc: '在某些系统中，需要在远程主机中手动弹出后再卸载镜像。',
+      checksum: '校验和',
+      checksumFailed: '计算校验和失败，请重试。',
       refresh: '刷新镜像列表',
       download: '下载镜像',
       attention: '注意',
@@ -345,6 +355,24 @@ const zh = {
           1800: '30分钟',
           3600: '1小时'
         },
+        scheduledScreenOff: {
+          title: '定时熄屏',
+          description: '在指定时间段内关闭 Desk 屏幕',
+          start: '开始',
+          end: '结束',
+          invalidRange: '开始时间和结束时间不能相同。',
+          saveFailed: '无法保存定时熄屏设置。'
+        },
+        displayPolicy: {
+          title: 'Desk 屏幕',
+          description: '选择内置屏幕闲置时的显示方式',
+          modes: {
+            alwaysOn: '始终显示',
+            idleClock: '闲置时显示时钟',
+            idleOff: '闲置后熄屏'
+          },
+          saveFailed: '无法保存屏幕显示设置。'
+        },
         wifi: {
           title: 'Wi-Fi',
           description: '配置 Wi-Fi 信息',
@@ -498,7 +526,42 @@ const zh = {
         download: '下载',
         install: '安装',
         changelog: '更新日志',
-        restart: '重启服务'
+        restart: '重启服务',
+        source: {
+          title: '更新服务器',
+          desc: '使用同一个根 URL 提供应用和系统固件更新。',
+          loadFailed: '读取更新服务器配置失败。',
+          saveFailed: '保存更新服务器失败。',
+          resetFailed: '恢复官方更新服务器失败。',
+          saved: '已保存更新服务器。',
+          resetDone: '已恢复官方更新服务器。',
+          invalidUrl: '请输入不含 URL 凭据且不是 manifest URL 的 HTTP(S) 更新服务器根 URL。',
+          save: '保存',
+          reset: '恢复官方源',
+          confirmTitle: '使用自定义更新服务器？',
+          confirmDesc: '此服务器会向设备提供应用和系统固件的更新元数据。请仅在信任其运营者时继续。',
+          confirm: '使用自定义服务器',
+          resetConfirmTitle: '恢复官方更新服务器？',
+          resetConfirmDesc: '后续检查更新将重新使用 NanoKVM-Pro 官方源。',
+          resetConfirm: '恢复官方源',
+          httpWarning: 'HTTP 无法保护更新传输过程。你还必须信任设备与更新服务器之间经过的所有网络。',
+          ready: '更新源已变更。准备好后可检查应用更新。',
+          previewDisabled: '使用自定义更新服务器时，预览更新不可用。'
+        },
+        manual: {
+          title: '手动更新',
+          desc: '上传应用包或受支持的系统固件包。',
+          upload: '上传更新包',
+          inspectFailed: '检查更新包失败。',
+          installFailed: '启动更新安装失败。',
+          confirmTitle: '安装更新包？',
+          confirmDesc: '更新包已暂存并完成检查。安装前请复核其内容和风险。',
+          install: '安装更新',
+          version: '目标版本：{{version}}',
+          size: '包大小：{{size}}',
+          finished: '更新已成功完成。',
+          refresh: '刷新页面',
+        }
       },
       account: {
         title: '帐号',

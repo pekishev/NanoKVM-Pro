@@ -1,12 +1,15 @@
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
-import { LoadingOutlined, RocketOutlined, SmileOutlined, UploadOutlined } from '@ant-design/icons';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { LoadingOutlined, RocketOutlined, SmileOutlined } from '@ant-design/icons';
 import { Button, Divider, Result, Spin, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
+import semver from 'semver';
 
 import * as api from '@/api/application.ts';
 import { isUpdateAvailable } from '@/lib/update.ts';
 
+import { ManualUpdate } from './manual-update.tsx';
 import { Preview } from './preview.tsx';
+import { UpdateSource } from './update-source.tsx';
 import { Updating } from './updating.tsx';
 
 type UpdateProps = {
@@ -15,35 +18,40 @@ type UpdateProps = {
 
 type Status = '' | 'loading' | 'updating' | 'outdated' | 'latest' | 'failed';
 
-const maxReleaseBytes = 256 * 1024 * 1024;
-
 export const Update = ({ setIsLocked }: UpdateProps) => {
   const { t } = useTranslation();
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [status, setStatus] = useState<Status>('');
+  const [status, setStatus] = useState<Status>('loading');
   const [currentVersion, setCurrentVersion] = useState('');
   const [latestVersion, setLatestVersion] = useState('');
   const [errMsg, setErrMsg] = useState('');
   const [tipMsg, setTipMsg] = useState('');
-  const [releaseFile, setReleaseFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(undefined);
-  const [fileError, setFileError] = useState('');
   const [checking, setChecking] = useState(true);
   const [savingCheck, setSavingCheck] = useState(false);
+  const [isCustomSource, setIsCustomSource] = useState(false);
+  const [manualJobID, setManualJobID] = useState('');
+  // Ignore late responses from an earlier check after the source changes.
+  const versionRequestID = useRef(0);
 
-  useEffect(() => {
-    checkForUpdates();
-  }, []);
-
-  function checkForUpdates() {
-    if (status === 'loading' || status === 'updating') return;
+  const checkForUpdates = useCallback(() => {
+    const requestID = ++versionRequestID.current;
     setStatus('loading');
 
     api
       .getVersion()
       .then((rsp: any) => {
+        if (requestID !== versionRequestID.current) return;
+
         if (rsp.code !== 0 || !rsp.data) {
+          setStatus('failed');
+          setErrMsg(t('settings.update.queryFailed'));
+          return;
+        }
+
+        const current = typeof rsp.data.current === 'string' ? semver.valid(rsp.data.current) : null;
+        const latest = typeof rsp.data.latest === 'string' ? semver.valid(rsp.data.latest) : null;
+        if (!current || !latest) {
           setStatus('failed');
           setErrMsg(t('settings.update.queryFailed'));
           return;
@@ -73,10 +81,16 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
         setStatus(outdated ? 'outdated' : 'latest');
       })
       .catch(() => {
+        if (requestID !== versionRequestID.current) return;
+
         setStatus('failed');
         setErrMsg(t('settings.update.queryFailed'));
       });
-  }
+  }, [t]);
+
+  useEffect(() => {
+    checkForUpdates();
+  }, [checkForUpdates]);
 
   function setUpdateCheck(enable: boolean) {
     if (savingCheck || status === 'updating') {
@@ -97,6 +111,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
           return;
         }
 
+        versionRequestID.current++;
         setLatestVersion(currentVersion);
         setTipMsg(t('settings.update.checksDisabled'));
         setStatus('latest');
@@ -109,6 +124,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
   function update() {
     if (status !== 'outdated') return;
 
+    setManualJobID('');
     setIsLocked(true);
     setUploadProgress(undefined);
     setStatus('updating');
@@ -122,41 +138,19 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
     });
   }
 
-  function selectFile() {
-    if (inputRef.current) {
-      inputRef.current.value = '';
-    }
-    inputRef.current?.click();
-  }
-
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
+  function installForkArchive(file: File) {
+    if (status === 'updating') {
       return;
     }
 
-    const name = file.name.toLowerCase();
-    if ((!name.endsWith('.tar.gz') && !name.endsWith('.tgz')) || file.size > maxReleaseBytes) {
-      setReleaseFile(null);
-      setFileError(t('settings.update.invalidFile'));
-      return;
-    }
-
-    setFileError('');
-    setReleaseFile(file);
-  }
-
-  function installRelease() {
-    if (!releaseFile || status === 'updating') {
-      return;
-    }
-
+    setManualJobID('');
     setIsLocked(true);
     setUploadProgress(0);
+    setErrMsg('');
     setStatus('updating');
 
     const formData = new FormData();
-    formData.append('file', releaseFile);
+    formData.append('file', file);
 
     api
       .uploadRelease(formData, (progress) => {
@@ -181,6 +175,38 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
       });
   }
 
+  // Manual jobs use the same progress screen but are polled instead of using
+  // the online updater's WebSocket progress events.
+  const startManualUpdate = useCallback((jobID: string) => {
+    setManualJobID(jobID);
+    setUploadProgress(undefined);
+    setErrMsg('');
+    setStatus('updating');
+  }, []);
+
+  const failManualUpdate = useCallback(
+    (message: string) => {
+      setIsLocked(false);
+      setStatus('failed');
+      setErrMsg(message);
+    },
+    [setIsLocked]
+  );
+
+  const finishManualUpdate = useCallback(() => {
+    setIsLocked(false);
+    setManualJobID('');
+  }, [setIsLocked]);
+
+  const handleUpdateSourceChanged = useCallback(() => {
+    versionRequestID.current++;
+    setCurrentVersion('');
+    setLatestVersion('');
+    setErrMsg('');
+    setTipMsg('');
+    setStatus('');
+  }, []);
+
   return (
     <>
       <div className="text-base font-bold">{t('settings.update.title')}</div>
@@ -200,7 +226,26 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
       </div>
       <Divider className="opacity-50" />
 
-      <Preview checkForUpdates={checkForUpdates} checksEnabled={checking} />
+      <Preview
+        checkForUpdates={checkForUpdates}
+        checksEnabled={checking}
+        disabled={isCustomSource}
+      />
+      <Divider className="opacity-50" />
+
+      <UpdateSource
+        onSourceChanged={handleUpdateSourceChanged}
+        onCustomSourceChange={setIsCustomSource}
+      />
+      <Divider className="opacity-50" />
+
+      <ManualUpdate
+        disabled={status === 'loading' || status === 'updating'}
+        setIsLocked={setIsLocked}
+        onInstallStarted={startManualUpdate}
+        onInstallFailed={failManualUpdate}
+        onForkArchiveConfirmed={installForkArchive}
+      />
       <Divider className="opacity-50" />
 
       <div className="flex min-h-[400px] flex-col justify-between">
@@ -210,7 +255,22 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
           </div>
         )}
 
-        {status === 'updating' && <Updating uploadProgress={uploadProgress} />}
+        {status === 'updating' && (
+          <Updating
+            uploadProgress={uploadProgress}
+            manualJobID={manualJobID}
+            onManualUpdateFailed={failManualUpdate}
+            onManualUpdateSucceeded={finishManualUpdate}
+          />
+        )}
+
+        {status === '' && (
+          <Result
+            status="info"
+            title={t('settings.update.source.ready')}
+            extra={<Button onClick={checkForUpdates}>{t('settings.update.title')}</Button>}
+          />
+        )}
 
         {status === 'latest' && (
           <Result
@@ -250,33 +310,6 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
               </Button>
             ]}
           />
-        )}
-
-        {status !== 'loading' && status !== 'updating' && (
-          <>
-            <Divider className="opacity-50" />
-            <div className="flex flex-col items-center space-y-3 pb-6">
-              <span className="text-center text-sm text-neutral-400">
-                {t('settings.update.uploadDesc')}
-              </span>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".gz,.tgz,application/gzip"
-                className="hidden"
-                onChange={onFileChange}
-              />
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button icon={<UploadOutlined />} onClick={selectFile}>
-                  {releaseFile ? releaseFile.name : t('settings.update.chooseFile')}
-                </Button>
-                <Button type="primary" disabled={!releaseFile} onClick={installRelease}>
-                  {t('settings.update.install')}
-                </Button>
-              </div>
-              {fileError && <span className="text-sm text-red-400">{fileError}</span>}
-            </div>
-          </>
         )}
 
         <div className="flex justify-center space-x-4">

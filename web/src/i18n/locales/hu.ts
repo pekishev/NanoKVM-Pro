@@ -44,6 +44,7 @@ const hu = {
       qualityHigh: 'Magas',
       qualityMedium: 'Közepes',
       qualityLow: 'Alacsony',
+      rotation: 'Forgatás',
       resetHdmi: 'Reset HDMI'
     },
     keyboard: {
@@ -77,7 +78,9 @@ const hu = {
         'Egyes rendszerekben szükséges lehet a virtuális lemez eltávolítása a távoli gépen, mielőtt a képet csatlakoztatja.',
       unmountFailed: 'Leválasztás sikertelen',
       unmountDesc:
-        'Egyes rendszerekben kézzel ki kell dobni a képet a távoli gazdagépen, mielőtt leválasztanád.'
+        'Egyes rendszerekben kézzel ki kell dobni a képet a távoli gazdagépen, mielőtt leválasztanád.',
+      checksum: 'Ellenőrzőösszeg',
+      checksumFailed: 'Az ellenőrzőösszeg kiszámítása sikertelen. Próbálja újra.'
     },
     script: {
       title: 'Szkriptek',
@@ -150,6 +153,14 @@ const hu = {
           600: '10 min',
           1800: '30 min',
           3600: '1 hour'
+        },
+        scheduledScreenOff: {
+          title: 'Ütemezett képernyőkikapcsolás',
+          description: 'A Desk képernyőjének kikapcsolása egy megadott időszakban',
+          start: 'Kezdés',
+          end: 'Befejezés',
+          invalidRange: 'A kezdési és befejezési időpontnak különböznie kell.',
+          saveFailed: 'Nem sikerült menteni az ütemezett képernyőkikapcsolás beállításait.'
         },
         wifi: {
           title: 'Wi-Fi',

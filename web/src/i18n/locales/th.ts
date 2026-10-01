@@ -42,6 +42,7 @@ const th = {
       qualityHigh: 'สูง',
       qualityMedium: 'กลาง',
       qualityLow: 'ต่ำ',
+      rotation: 'การหมุน',
       resetHdmi: 'รีเช็ท HDMI'
     },
     keyboard: {
@@ -80,7 +81,9 @@ const th = {
       mountFailed: 'การติดตั้งล้มเหลว',
       mountDesc: 'ในบางระบบ, จะต้อง eject ดิสก์จำลองก่อนที่จะใส่ดิสก์ใหม่.',
       unmountFailed: 'ถอดออกล้มเหลว',
-      unmountDesc: 'ในบางระบบ คุณจำเป็นต้องนำออกด้วยตนเองในโฮสต์ระยะไกลก่อนที่จะถอดภาพออก'
+      unmountDesc: 'ในบางระบบ คุณจำเป็นต้องนำออกด้วยตนเองในโฮสต์ระยะไกลก่อนที่จะถอดภาพออก',
+      checksum: 'Checksum',
+      checksumFailed: 'ไม่สามารถคำนวณค่า checksum ได้ โปรดลองอีกครั้ง'
     },
     script: {
       title: 'สคริปต์',
@@ -169,6 +172,14 @@ const th = {
           600: '10 นาที',
           1800: '30 นาที',
           3600: '1 ชั่วโมง'
+        },
+        scheduledScreenOff: {
+          title: 'ตั้งเวลาปิดหน้าจอ',
+          description: 'ปิดหน้าจอ Desk ในช่วงเวลาที่กำหนด',
+          start: 'เริ่ม',
+          end: 'สิ้นสุด',
+          invalidRange: 'เวลาเริ่มต้นและสิ้นสุดต้องไม่ตรงกัน',
+          saveFailed: 'ไม่สามารถบันทึกการตั้งค่าปิดหน้าจอตามกำหนดเวลาได้'
         },
         wifi: {
           title: 'Wi-Fi',
