@@ -5,6 +5,17 @@ export function paste(content: string) {
   return http.post('/api/hid/paste', { content });
 }
 
+// recognize speech on the device
+export function recognizeSpeech(wav: Blob) {
+  return http.request({
+    method: 'post',
+    url: '/api/hid/speech',
+    data: wav,
+    headers: { 'Content-Type': 'audio/wav' },
+    timeout: 90 * 1000
+  });
+}
+
 // reset hid
 export function reset() {
   return http.post('/api/hid/reset');

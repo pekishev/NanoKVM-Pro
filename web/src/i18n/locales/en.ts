@@ -122,6 +122,11 @@ const en = {
       voiceDenied: 'Microphone access denied',
       voiceNetwork: 'Speech recognition service is unavailable',
       voiceError: 'Speech recognition error: {{error}}',
+      voiceLocal: 'Voice input recognized on NanoKVM (Russian only)',
+      voiceLocalStop: 'Stop recording and recognize',
+      voiceLocalFailed: 'Local speech recognition failed: {{error}}',
+      voiceSilent:
+        'Microphone "{{device}}" delivered silence. Make sure it is not muted and is selected in the site settings (icon left of the address bar)',
       macro: {
         title: 'Macros',
         custom: 'Custom',

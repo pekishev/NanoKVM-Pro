@@ -2,12 +2,13 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { Button, Input, Modal, Select, Space, Tooltip, type InputRef } from 'antd';
 import clsx from 'clsx';
 import { useSetAtom } from 'jotai';
-import { ClipboardIcon, MicIcon } from 'lucide-react';
+import { AudioLinesIcon, ClipboardIcon, MicIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { paste } from '@/api/hid';
+import { paste, recognizeSpeech } from '@/api/hid';
 import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
 import { KeyboardReport } from '@/lib/keyboard.ts';
+import { startWavRecorder, type WavRecorder } from '@/lib/wav-recorder.ts';
 import { client, MessageEvent } from '@/lib/websocket.ts';
 
 const { TextArea } = Input;
@@ -177,6 +178,32 @@ function appendChunk(text: string, chunk: string): string {
   return text && !/\s$/.test(text) ? `${text} ${trimmed}` : text + trimmed;
 }
 
+function normalizeSpeech(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+// Some engines (e.g. Chrome on Android) emit results that repeat the whole
+// phrase so far, so a result extending the previous one replaces it.
+function joinSpeechResults(results: ArrayLike<SpeechRecognitionResultLike>): string {
+  const pieces: string[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const text = toTypeable(results[i][0].transcript).trim();
+    const norm = normalizeSpeech(text);
+    if (!norm) continue;
+
+    const prev = pieces.length ? normalizeSpeech(pieces[pieces.length - 1]) : '';
+    if (prev && (norm === prev || norm.startsWith(`${prev} `))) {
+      pieces[pieces.length - 1] = text;
+    } else {
+      pieces.push(text);
+    }
+  }
+  return pieces.reduce(appendChunk, '');
+}
+
 type SpeechRecognitionResultLike = { isFinal: boolean; 0: { transcript: string } };
 
 interface SpeechRecognitionLike {
@@ -281,7 +308,69 @@ export const Paste = () => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceTextRef = useRef('');
 
-  useEffect(() => () => recognitionRef.current?.abort(), []);
+  const [localVoice, setLocalVoice] = useState<'' | 'recording' | 'processing'>('');
+  const recorderRef = useRef<WavRecorder | null>(null);
+  const recorderStartingRef = useRef(false);
+  const localVoiceSeqRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      recognitionRef.current?.abort();
+      recorderRef.current?.cancel();
+    },
+    []
+  );
+
+  function cancelLocalVoice() {
+    localVoiceSeqRef.current++;
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
+    setLocalVoice('');
+  }
+
+  async function toggleLocalVoice() {
+    const recorder = recorderRef.current;
+    if (recorder) {
+      recorderRef.current = null;
+      const seq = ++localVoiceSeqRef.current;
+      const { wav, silent } = recorder.stop();
+      if (silent) {
+        setLocalVoice('');
+        setErrMsg(t('keyboard.voiceSilent', { device: recorder.device || '?' }));
+        return;
+      }
+      setLocalVoice('processing');
+      try {
+        const rsp = await recognizeSpeech(wav);
+        if (seq !== localVoiceSeqRef.current) return;
+        if (rsp.code !== 0) {
+          setErrMsg(t('keyboard.voiceLocalFailed', { error: rsp.msg }));
+          return;
+        }
+        const value = appendChunk(inputValue, toTypeable(rsp.data?.text ?? '')).slice(0, maxLength);
+        setStatus(canType(value) ? '' : 'error');
+        setInputValue(value);
+      } catch (err) {
+        if (seq === localVoiceSeqRef.current) setErrMsg(t('keyboard.voiceLocalFailed', { error: String(err) }));
+      } finally {
+        if (seq === localVoiceSeqRef.current) setLocalVoice('');
+      }
+      return;
+    }
+
+    if (recorderStartingRef.current) return;
+    recorderStartingRef.current = true;
+    setErrMsg('');
+    try {
+      recorderRef.current = await startWavRecorder();
+      setLocalVoice('recording');
+    } catch (err) {
+      const denied = err instanceof DOMException && err.name === 'NotAllowedError';
+      setErrMsg(denied ? t('keyboard.voiceDenied') : t('keyboard.voiceLocalFailed', { error: String(err) }));
+    } finally {
+      recorderStartingRef.current = false;
+    }
+  }
 
   function stopVoice() {
     const recognition = recognitionRef.current;
@@ -312,18 +401,7 @@ export const Paste = () => {
     voiceTextRef.current = inputValue;
 
     recognition.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        const text = toTypeable(result[0].transcript);
-        if (result.isFinal) {
-          voiceTextRef.current = appendChunk(voiceTextRef.current, text);
-        } else {
-          interim = appendChunk(interim, text);
-        }
-      }
-
-      const value = appendChunk(voiceTextRef.current, interim).slice(0, maxLength);
+      const value = appendChunk(voiceTextRef.current, joinSpeechResults(e.results)).slice(0, maxLength);
       setStatus(canType(value) ? '' : 'error');
       setInputValue(value);
     };
@@ -350,6 +428,7 @@ export const Paste = () => {
 
   function closeModal() {
     stopVoice();
+    cancelLocalVoice();
     setIsModalOpen(false);
   }
 
@@ -367,6 +446,7 @@ export const Paste = () => {
     if (isLoading || sendingRef.current || !inputValue || status === 'error') return;
 
     stopVoice();
+    cancelLocalVoice();
     const segments = planPaste(inputValue, language);
     if (!segments) {
       setStatus('error');
@@ -497,7 +577,7 @@ export const Paste = () => {
           maxLength={maxLength}
           autoSize={{ minRows: 5, maxRows: 12 }}
           placeholder={t('keyboard.placeholder')}
-          readOnly={isListening}
+          readOnly={isListening || localVoice !== ''}
           onChange={onChange}
         />
 
@@ -524,13 +604,36 @@ export const Paste = () => {
                 <Button
                   icon={<MicIcon size={16} className={clsx(isListening && 'animate-pulse')} />}
                   danger={isListening}
-                  disabled={isLoading || !window.isSecureContext}
+                  disabled={isLoading || localVoice !== '' || !window.isSecureContext}
                   onClick={toggleVoice}
                 />
               </Tooltip>
             </Space.Compact>
           )}
-          <Button type="primary" loading={isLoading} disabled={status === 'error'} htmlType="submit" onClick={submit}>
+          <Tooltip
+            title={
+              !window.isSecureContext
+                ? t('keyboard.voiceHttps')
+                : localVoice === 'recording'
+                  ? t('keyboard.voiceLocalStop')
+                  : t('keyboard.voiceLocal')
+            }
+          >
+            <Button
+              icon={<AudioLinesIcon size={16} className={clsx(localVoice === 'recording' && 'animate-pulse')} />}
+              danger={localVoice === 'recording'}
+              loading={localVoice === 'processing'}
+              disabled={isLoading || isListening || !window.isSecureContext}
+              onClick={toggleLocalVoice}
+            />
+          </Tooltip>
+          <Button
+            type="primary"
+            loading={isLoading}
+            disabled={status === 'error' || localVoice === 'processing'}
+            htmlType="submit"
+            onClick={submit}
+          >
             {t('keyboard.submit')}
           </Button>
         </div>

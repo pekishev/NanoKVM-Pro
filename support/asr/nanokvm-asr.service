@@ -1,0 +1,13 @@
+[Unit]
+Description=NanoKVM local speech recognition
+After=network.target
+
+[Service]
+ExecStart=/root/npu/venv/bin/python /root/npu/asr/asr_server.py
+Environment=ASR_MODEL_DIR=/root/npu/vosk
+Nice=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
