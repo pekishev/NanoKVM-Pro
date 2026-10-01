@@ -5,6 +5,7 @@
 # The closed components (libkvm, pikvm, kvmcomm) come from the official package
 # named by [official] base_version in config.ini. Every DEB is rebuilt with the
 # fork version because the in-device updater requires matching DEB versions.
+# The nanokvm DEB also carries the speech recognition service from support/asr.
 #
 # Usage:
 #   repack_official.sh --version 1.2.16-fork.1 --server NanoKVM-Server --web web/dist \
@@ -13,6 +14,7 @@ set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 config="${script_dir}/config.ini"
+asr_dir="${script_dir}/../asr"
 apps=(nanokvmpro pikvm kvmcomm)
 
 version=""
@@ -106,6 +108,16 @@ for app in "${apps[@]}"; do
         find "${server_dir}/web" -type d -exec chmod 0755 {} +
         find "${server_dir}/web" -type f -exec chmod 0644 {} +
         printf '%s\n' "$version" >"${tree}/kvmapp/version"
+
+        install -D -m 0644 "${asr_dir}/asr_server.py" "${tree}/kvmapp/asr/asr_server.py"
+        install -D -m 0755 "${asr_dir}/install.sh" "${tree}/kvmapp/asr/install.sh"
+        install -D -m 0644 "${asr_dir}/nanokvm-asr.service" "${tree}/etc/systemd/system/nanokvm-asr.service"
+        for script in postinst prerm; do
+            # An official script that exits early would skip the appended ASR steps.
+            ! grep -qE '^[[:space:]]*exit' "${tree}/DEBIAN/${script}" ||
+                die "official ${script} exits early; update the ASR packaging"
+            cat "${asr_dir}/${script}" >>"${tree}/DEBIAN/${script}"
+        done
     fi
 
     out_deb="${stage}/${app}_${version}_arm64.deb"

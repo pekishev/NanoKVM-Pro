@@ -1,0 +1,6 @@
+
+# nanokvm-asr: reload the unit and script; enabling is left to /kvmapp/asr/install.sh.
+if [ "$(stat -c %d:%i /)" == "$(stat -c %d:%i /proc/1/root/.)" ]; then
+    systemctl daemon-reload || true
+    systemctl try-restart --no-block nanokvm-asr.service || true
+fi

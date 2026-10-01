@@ -1,9 +1,12 @@
 [Unit]
 Description=NanoKVM local speech recognition
 After=network.target
+# The runtime and model are not part of the package: /kvmapp/asr/install.sh provides them.
+ConditionPathExists=/root/npu/venv/bin/python
+ConditionPathExists=/root/npu/vosk/am/encoder.int8.onnx
 
 [Service]
-ExecStart=/root/npu/venv/bin/python /root/npu/asr/asr_server.py
+ExecStart=/root/npu/venv/bin/python /kvmapp/asr/asr_server.py
 Environment=ASR_MODEL_DIR=/root/npu/vosk
 Nice=10
 Restart=on-failure

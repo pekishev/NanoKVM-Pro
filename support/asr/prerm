@@ -1,0 +1,5 @@
+
+# nanokvm-asr
+if [ "$1" = "remove" ]; then
+    systemctl disable --now nanokvm-asr.service >/dev/null 2>&1 || true
+fi
