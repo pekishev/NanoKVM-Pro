@@ -154,6 +154,10 @@ func selectUpdate(current, official, fork string) (string, string) {
 	officialNewer := official != "" && versionNewer(official, current)
 
 	switch {
+	case forkNewer && officialNewer && fork == official:
+		// A fork release published in the official package format is preferred,
+		// because dpkg then tracks the installed files.
+		return official, sourceOfficial
 	case forkNewer && officialNewer:
 		if compareBase(parseAppVersion(fork), parseAppVersion(official)) >= 0 {
 			return fork, sourceFork

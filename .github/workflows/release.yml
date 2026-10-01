@@ -66,6 +66,9 @@ jobs:
     needs: [meta, frontend, backend]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download web dist
         uses: actions/download-artifact@v4
         with:
@@ -98,8 +101,18 @@ jobs:
             echo "Optional: copy version to /kvmapp/version"
           } > pkg/INSTALL.txt
           tar -C pkg -czf "nanokvm-pro-${VERSION}.tar.gz" NanoKVM-Server web version INSTALL.txt
-          sha256sum "nanokvm-pro-${VERSION}.tar.gz" pkg/NanoKVM-Server | tee sha256.txt
           ls -lh "nanokvm-pro-${VERSION}.tar.gz" pkg/NanoKVM-Server pkg/web/index.html
+
+      - name: Package official format
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          ./support/scripts/repack_official.sh \
+            --version "$VERSION" \
+            --server pkg/NanoKVM-Server \
+            --web pkg/web \
+            --out official
+          sha256sum "nanokvm-pro-${VERSION}.tar.gz" "official/nanokvm_pro_${VERSION}.tar.gz" pkg/NanoKVM-Server | tee sha256.txt
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -111,9 +124,19 @@ jobs:
           body: |
             Fork build from `${{ github.repository }}` @ `${{ github.sha }}`.
 
-            Unpack `nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz` and follow `INSTALL.txt`.
+            Install options:
+
+            - **Update server**: in Settings → Update → Update Server enter
+              `https://github.com/${{ github.repository }}/releases/latest/download`.
+              The device then updates from `nanokvm_pro_latest.json` of the latest release.
+            - **Manual update**: upload `nanokvm_pro_${{ needs.meta.outputs.version }}.tar.gz`
+              (official package format, installed with dpkg) or
+              `nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz` (server and web only).
+            - **By hand**: unpack `nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz` and follow `INSTALL.txt`.
           files: |
             nanokvm-pro-${{ needs.meta.outputs.version }}.tar.gz
+            official/nanokvm_pro_${{ needs.meta.outputs.version }}.tar.gz
+            official/nanokvm_pro_latest.json
             pkg/NanoKVM-Server
             sha256.txt
           fail_on_unmatched_files: true

@@ -54,6 +54,14 @@ func TestSelectUpdate(t *testing.T) {
 			source:   sourceFork,
 		},
 		{
+			name:     "fork published to the selected source installs as a package",
+			current:  "1.2.15-fork.1",
+			official: "1.2.15-fork.2",
+			fork:     "1.2.15-fork.2",
+			latest:   "1.2.15-fork.2",
+			source:   sourceOfficial,
+		},
+		{
 			name:     "official ahead of fork line",
 			current:  "1.2.15-fork.1",
 			official: "1.2.16",
