@@ -66,9 +66,7 @@ func GetScreen() *Screen {
 
 func (s *Screen) Check() {
 	if time.Since(s.lastCheck) >= 5*time.Second {
-		s.Width = readSize(WidthPath)
-		s.Height = readSize(HeightPath)
-		s.lastCheck = time.Now()
+		s.RefreshSize()
 	}
 
 	if s.FPS < 0 || s.FPS > 120 {
@@ -90,6 +88,12 @@ func (s *Screen) Check() {
 	if s.Quality < 1 || s.Quality > 100 {
 		s.Quality = 80
 	}
+}
+
+func (s *Screen) RefreshSize() {
+	s.Width = readSize(WidthPath)
+	s.Height = readSize(HeightPath)
+	s.lastCheck = time.Now()
 }
 
 func readSize(filePath string) uint16 {

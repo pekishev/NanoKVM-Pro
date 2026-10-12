@@ -45,6 +45,7 @@ func server(r *gin.Engine) {
 		localRouter,
 		extensionsRouter,
 		speedtestRouter,
+		mcpRouter,
 	}
 
 	for _, fn := range routers {

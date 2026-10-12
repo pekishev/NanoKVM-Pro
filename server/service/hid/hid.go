@@ -2,6 +2,7 @@ package hid
 
 import (
 	"errors"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -21,6 +22,10 @@ const (
 	HID0 = "/dev/hidg0" // Keyboard
 	HID1 = "/dev/hidg1" // Mouse (Relative Mode)
 	HID2 = "/dev/hidg2" // Touchpad (Absolute Mode)
+
+	hidWriteTimeout  = 80 * time.Millisecond
+	hidWriteAttempts = 8
+	hidWriteRetryGap = 5 * time.Millisecond
 )
 
 var (
@@ -85,6 +90,45 @@ func (h *Hid) Open() {
 	h.OpenNoLock()
 }
 
+func (h *Hid) EnsureKeyboard() error {
+	h.kbMutex.Lock()
+	h.mouseMutex.Lock()
+	defer h.mouseMutex.Unlock()
+	defer h.kbMutex.Unlock()
+
+	if h.g0 == nil {
+		h.OpenNoLock()
+	}
+	if h.g0 == nil {
+		return errors.New("HID keyboard is not available")
+	}
+	return nil
+}
+
+func (h *Hid) EnsureMouse() error {
+	h.kbMutex.Lock()
+	h.mouseMutex.Lock()
+	defer h.mouseMutex.Unlock()
+	defer h.kbMutex.Unlock()
+
+	if h.g2 == nil {
+		h.OpenNoLock()
+	}
+	if h.g2 == nil {
+		return errors.New("HID mouse is not available")
+	}
+	return nil
+}
+
+func (h *Hid) KeyboardAvailable() bool {
+	if _, err := os.Stat(HID0); err == nil {
+		return true
+	}
+	h.kbMutex.Lock()
+	defer h.kbMutex.Unlock()
+	return h.g0 != nil
+}
+
 func (h *Hid) Close() {
 	h.kbMutex.Lock()
 	defer h.kbMutex.Unlock()
@@ -95,73 +139,55 @@ func (h *Hid) Close() {
 }
 
 func (h *Hid) WriteHid0(data []byte) {
-	deadline := time.Now().Add(8 * time.Millisecond)
+	_ = h.WriteHid0Err(data)
+}
 
-	h.kbMutex.Lock()
-	_ = h.g0.SetWriteDeadline(deadline)
-	_, err := h.g0.Write(data)
-	h.kbMutex.Unlock()
-
-	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrClosed):
-			log.Errorf("hid already closed, reopen it...")
-			h.OpenNoLock()
-		case errors.Is(err, os.ErrDeadlineExceeded):
-			log.Debugf("write to %s timeout", HID0)
-		default:
-			log.Errorf("write to %s failed: %s", HID0, err)
-		}
-		return
-	}
-
-	log.Debugf("write to %s: %v", HID0, data)
+func (h *Hid) WriteHid0Err(data []byte) error {
+	return h.writeGadget(&h.g0, &h.kbMutex, HID0, data)
 }
 
 func (h *Hid) WriteHid1(data []byte) {
-	deadline := time.Now().Add(8 * time.Millisecond)
-
-	h.mouseMutex.Lock()
-	_ = h.g1.SetWriteDeadline(deadline)
-	_, err := h.g1.Write(data)
-	h.mouseMutex.Unlock()
-
-	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrClosed):
-			log.Errorf("hid already closed, reopen it...")
-			h.OpenNoLock()
-		case errors.Is(err, os.ErrDeadlineExceeded):
-			log.Debugf("write to %s timeout", HID1)
-		default:
-			log.Errorf("write to %s failed: %s", HID1, err)
-		}
-		return
-	}
-
-	log.Debugf("write to %s: %v", HID1, data)
+	_ = h.writeGadget(&h.g1, &h.mouseMutex, HID1, data)
 }
 
 func (h *Hid) WriteHid2(data []byte) {
-	deadline := time.Now().Add(8 * time.Millisecond)
+	_ = h.writeGadget(&h.g2, &h.mouseMutex, HID2, data)
+}
 
-	h.mouseMutex.Lock()
-	_ = h.g2.SetWriteDeadline(deadline)
-	_, err := h.g2.Write(data)
-	h.mouseMutex.Unlock()
-
-	if err != nil {
+func (h *Hid) writeGadget(file **os.File, mu *sync.Mutex, path string, data []byte) error {
+	var last error
+	for attempt := 0; attempt < hidWriteAttempts; attempt++ {
+		mu.Lock()
+		if *file == nil {
+			mu.Unlock()
+			err := errors.New("not open")
+			log.Errorf("write to %s failed: %s", path, err)
+			return err
+		}
+		_ = (*file).SetWriteDeadline(time.Now().Add(hidWriteTimeout))
+		n, err := (*file).Write(data)
+		mu.Unlock()
+		if err == nil && n == len(data) {
+			log.Debugf("write to %s: %v", path, data)
+			return nil
+		}
+		if err == nil {
+			err = io.ErrShortWrite
+		}
+		last = err
 		switch {
 		case errors.Is(err, os.ErrClosed):
 			log.Errorf("hid already closed, reopen it...")
 			h.OpenNoLock()
-		case errors.Is(err, os.ErrDeadlineExceeded):
-			log.Debugf("write to %s timeout", HID2)
+		case errors.Is(err, os.ErrDeadlineExceeded), errors.Is(err, io.ErrShortWrite):
+			time.Sleep(hidWriteRetryGap)
 		default:
-			log.Errorf("write to %s failed: %s", HID2, err)
+			log.Errorf("write to %s failed: %s", path, err)
+			return err
 		}
-		return
 	}
-
-	log.Debugf("write to %s: %v", HID2, data)
+	if last != nil {
+		log.Errorf("write to %s failed after %d attempts: %s", path, hidWriteAttempts, last)
+	}
+	return last
 }

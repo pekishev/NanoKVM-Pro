@@ -18,6 +18,7 @@ import (
 
 type KvmVision struct {
 	StreamType uint8
+	readMu     sync.Mutex
 }
 
 const (
@@ -93,6 +94,9 @@ func (k *KvmVision) SetRateControl(mode uint8) int {
 }
 
 func (k *KvmVision) ReadMjpeg(width uint16, height uint16, quality uint16) (data []byte, result int) {
+	k.readMu.Lock()
+	defer k.readMu.Unlock()
+
 	var (
 		kvmData  *C.uint8_t
 		dataSize C.uint32_t
@@ -119,6 +123,9 @@ func (k *KvmVision) ReadMjpeg(width uint16, height uint16, quality uint16) (data
 }
 
 func (k *KvmVision) ReadH264(width uint16, height uint16, bitRate uint16) (data []byte, result int) {
+	k.readMu.Lock()
+	defer k.readMu.Unlock()
+
 	var (
 		kvmData  *C.uint8_t
 		dataSize C.uint32_t
@@ -145,6 +152,9 @@ func (k *KvmVision) ReadH264(width uint16, height uint16, bitRate uint16) (data 
 }
 
 func (k *KvmVision) ReadH265(width uint16, height uint16, bitRate uint16) (data []byte, result int) {
+	k.readMu.Lock()
+	defer k.readMu.Unlock()
+
 	var (
 		kvmData  *C.uint8_t
 		dataSize C.uint32_t
@@ -171,6 +181,9 @@ func (k *KvmVision) ReadH265(width uint16, height uint16, bitRate uint16) (data 
 }
 
 func (k *KvmVision) ReadAudio() (data []byte, result int) {
+	k.readMu.Lock()
+	defer k.readMu.Unlock()
+
 	var (
 		kvmData  *C.uint8_t
 		dataSize C.uint32_t
