@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 
 import { getMenuDisplayMode } from '@/lib/localstorage.ts';
+import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
 import { menuDisplayModeAtom, submenuOpenCountAtom } from '@/jotai/settings.ts';
 
 const HIDE_TIMEOUT = 5000;
@@ -18,6 +19,7 @@ export interface MenuVisibilityState {
 export function useMenuVisibility(): MenuVisibilityState {
   const [menuDisplayMode, setMenuDisplayMode] = useAtom(menuDisplayModeAtom);
   const submenuOpenCount = useAtomValue(submenuOpenCountAtom);
+  const isMacroPlaying = useAtomValue(isMacroPlayingAtom);
 
   const [isMenuExpanded, setIsMenuExpanded] = useState(true);
   const [isMenuMoved, setIsMenuMoved] = useState(false);
@@ -25,9 +27,17 @@ export function useMenuVisibility(): MenuVisibilityState {
   const [isMenuHidden, setIsMenuHidden] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMacroPlayingRef = useRef(isMacroPlaying);
+  isMacroPlayingRef.current = isMacroPlaying;
 
   const startCountdown = useCallback(() => {
-    if (menuDisplayMode !== 'auto' || submenuOpenCount > 0 || !isMenuExpanded || isMenuMoved) {
+    if (
+      isMacroPlayingRef.current ||
+      menuDisplayMode !== 'auto' ||
+      submenuOpenCount > 0 ||
+      !isMenuExpanded ||
+      isMenuMoved
+    ) {
       return;
     }
 
@@ -63,6 +73,10 @@ export function useMenuVisibility(): MenuVisibilityState {
 
   // Handle display mode changes
   useEffect(() => {
+    if (isMacroPlayingRef.current) {
+      return;
+    }
+
     setIsMenuHidden(false);
 
     if (menuDisplayMode === 'auto') {
@@ -71,6 +85,18 @@ export function useMenuVisibility(): MenuVisibilityState {
       stopCountdown();
     }
   }, [menuDisplayMode, startCountdown, stopCountdown]);
+
+  useEffect(() => {
+    if (isMacroPlaying) {
+      stopCountdown();
+      setIsMenuHidden(true);
+      return;
+    }
+
+    if (menuDisplayMode === 'always') {
+      setIsMenuHidden(false);
+    }
+  }, [isMacroPlaying, menuDisplayMode, stopCountdown]);
 
   // Handle hover and submenu state
   useEffect(() => {
@@ -82,12 +108,15 @@ export function useMenuVisibility(): MenuVisibilityState {
   }, [submenuOpenCount, isMenuHovered, startCountdown, stopCountdown]);
 
   // Handle hover state
-  const handleHovered = useCallback((hovered: boolean) => {
-    setIsMenuHovered(hovered);
-    if (hovered) {
-      setIsMenuHidden(false);
-    }
-  }, []);
+  const handleHovered = useCallback(
+    (hovered: boolean) => {
+      setIsMenuHovered(hovered);
+      if (hovered && !isMacroPlayingRef.current) {
+        setIsMenuHidden(false);
+      }
+    },
+    []
+  );
 
   const handleMoved = useCallback(() => {
     if (!isMenuMoved) {

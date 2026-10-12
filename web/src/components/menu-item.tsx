@@ -1,9 +1,10 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, Tooltip } from 'antd';
 import clsx from 'clsx';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useMediaQuery } from 'react-responsive';
 
+import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
 import { submenuOpenCountAtom } from '@/jotai/settings.ts';
 
 type MenuItemProps = {
@@ -25,21 +26,37 @@ export const MenuItem = ({
 }: MenuItemProps) => {
   const isBigScreen = useMediaQuery({ minWidth: 640 });
   const setSubmenuOpenCount = useSetAtom(submenuOpenCountAtom);
+  const isMacroPlaying = useAtomValue(isMacroPlayingAtom);
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const isPopoverOpenRef = useRef(false);
+  const isMacroPlayingRef = useRef(isMacroPlaying);
+  isMacroPlayingRef.current = isMacroPlaying;
 
-  function togglePopover(open: boolean) {
-    setIsTooltipOpen(false);
-    setIsPopoverOpen(open);
+  const togglePopover = useCallback(
+    (open: boolean) => {
+      if (open && isMacroPlayingRef.current) {
+        return;
+      }
+      if (isPopoverOpenRef.current === open) {
+        return;
+      }
 
-    // Update global submenu count
-    setSubmenuOpenCount((count) => (open ? count + 1 : Math.max(0, count - 1)));
+      isPopoverOpenRef.current = open;
+      setIsTooltipOpen(false);
+      setIsPopoverOpen(open);
+      setSubmenuOpenCount((count) => (open ? count + 1 : Math.max(0, count - 1)));
+      onOpenChange?.(open);
+    },
+    [onOpenChange, setSubmenuOpenCount]
+  );
 
-    if (onOpenChange) {
-      onOpenChange(open);
+  useEffect(() => {
+    if (isMacroPlaying) {
+      togglePopover(false);
     }
-  }
+  }, [isMacroPlaying, togglePopover]);
 
   function toggleTooltip(open: boolean) {
     if (isPopoverOpen) {

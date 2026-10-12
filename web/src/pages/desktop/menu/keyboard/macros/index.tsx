@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Divider, Popover } from 'antd';
+import { useAtomValue } from 'jotai';
 import { PlayIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/hid.ts';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
 
 import { Editor } from './editor.tsx';
 import { MacroItem } from './item.tsx';
@@ -12,6 +14,7 @@ import type { Macro } from './types.ts';
 
 export const Macros = () => {
   const { t } = useTranslation();
+  const isMacroPlaying = useAtomValue(isMacroPlayingAtom);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -23,6 +26,12 @@ export const Macros = () => {
       getMacros();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isMacroPlaying) {
+      setIsOpen(false);
+    }
+  }, [isMacroPlaying]);
 
   async function getMacros() {
     try {
@@ -69,6 +78,9 @@ export const Macros = () => {
 
   function handleOpenChange(open: boolean) {
     if (open) {
+      if (isMacroPlaying) {
+        return;
+      }
       setIsOpen(true);
       return;
     }

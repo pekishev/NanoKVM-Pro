@@ -100,12 +100,17 @@ async function typeText(text: string) {
 
 export async function playMacro(macro: Macro, macros: Macro[] = []): Promise<string | null> {
   const store = getDefaultStore();
+  if (store.get(isMacroPlayingAtom)) {
+    return null;
+  }
+
   const previousKeyboard = store.get(isKeyboardEnableAtom);
 
   store.set(isKeyboardEnableAtom, false);
   store.set(isMacroPlayingAtom, true);
 
   try {
+    await sleep(80);
     return await playCommands(macro, macros, new MouseReportAbsolute(), 0);
   } finally {
     store.set(isMacroPlayingAtom, false);
