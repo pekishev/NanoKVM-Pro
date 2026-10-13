@@ -1,15 +1,30 @@
-# NanoKVM-Pro (community fork)
+# NanoKVM MCP — NanoKVM-Pro community fork
+
+**NanoKVM MCP** · **NanoKVM-Pro MCP** · Model Context Protocol server for IP-KVM (HDMI + HID)
 
 [![Latest release](https://img.shields.io/github/v/release/pekishev/NanoKVM-Pro)](https://github.com/pekishev/NanoKVM-Pro/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/github/license/pekishev/NanoKVM-Pro)](LICENSE)
+
+## NanoKVM MCP
+
+This firmware includes a built-in **NanoKVM MCP** server: agents (Cursor, Claude, and other MCP clients) can watch the HDMI frame and type/click on the remote PC.
+
+В этой прошивке есть **NanoKVM MCP**: агент видит HDMI и управляет удалённым ПК через HID.
+
+- Endpoint: `https://<device>/mcp` (same login as the web UI)
+- Tools: `status`, `screenshot`, `click`, `type_keys`, `type_text`, `stop_type`, `press`
+- Coordinates: integer pixels of the full HDMI frame, origin top-left
+- Mixed English/Russian typing sends Alt+Shift itself
+
+Search terms: NanoKVM MCP, NanoKVM-Pro MCP, MCP KVM, MCP HDMI HID.
 
 > **This is a fork** of [sipeed/NanoKVM-Pro](https://github.com/sipeed/NanoKVM-Pro), not an official Sipeed release.
 >
 > **Это форк** [sipeed/NanoKVM-Pro](https://github.com/sipeed/NanoKVM-Pro), а не официальная прошивка Sipeed.
 
-The hardware, closed components, and most of the web UI still come from upstream. This repository adds Russian input, HID macros, on-device speech recognition, an MCP agent API, and GitHub-based updates.
+The hardware, closed components, and most of the web UI still come from upstream. Besides **NanoKVM MCP**, this repository adds Russian input, HID macros, on-device speech recognition, and GitHub-based updates.
 
-Железо и закрытые компоненты — как у Sipeed. Здесь — русский ввод, HID-макросы, распознавание речи на устройстве, MCP для агентов и обновления с GitHub.
+Железо и закрытые компоненты — как у Sipeed. Кроме **NanoKVM MCP** — русский ввод, HID-макросы, распознавание речи на устройстве и обновления с GitHub.
 
 **Latest build:** [Releases](https://github.com/pekishev/NanoKVM-Pro/releases/latest) (currently based on official **1.2.15**)
 
@@ -36,14 +51,6 @@ BadUSB-style scripts instead of the old Leader Key:
 ### Mouse
 
 - Extra mode **Absolute Simple** (`absolute-simple`) alongside absolute and relative
-
-### MCP (agents)
-
-Authenticated endpoint `/mcp` so an agent can drive the remote PC over HDMI + HID:
-
-`status`, `screenshot`, `click`, `type_keys`, `type_text`, `stop_type`, `press`
-
-Coordinates are full-frame HDMI pixels. Mixed EN/RU typing sends Alt+Shift by itself.
 
 ### Updates
 
