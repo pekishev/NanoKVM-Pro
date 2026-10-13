@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppleOutlined, WindowsOutlined } from '@ant-design/icons';
 import clsx from 'clsx';
 import { useAtom } from 'jotai';
-import { XIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, XIcon } from 'lucide-react';
 import { KeyboardButtonTheme, KeyboardReact as Keyboard } from 'react-simple-keyboard';
-import { Drawer } from 'vaul';
+import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 
 import 'react-simple-keyboard/build/css/index.css';
 import '@/assets/styles/keyboard.css';
 
-import { ConfigProvider, Segmented, Select, theme } from 'antd';
+import { ConfigProvider, Segmented, Select, theme, Tooltip } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useMediaQuery } from 'react-responsive';
 
 import { getKeycode, getModifierBit } from '@/lib/keymap.ts';
@@ -26,17 +27,53 @@ import {
   specialKeyMap
 } from './virtual-keys.ts';
 
+const MIN_SCALE = 0.55;
+const MAX_SCALE = 1.25;
+
+function clampScale(value: number) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
+}
+
+function clampPosition(x: number, y: number, width: number, height: number) {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - width)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - height))
+  };
+}
+
 export const VirtualKeyboard = () => {
+  const { t } = useTranslation();
   const isBigScreen = useMediaQuery({ minWidth: 850 });
+  const baseWidth = isBigScreen ? 820 : 650;
 
   const [isKeyboardOpen, setIsKeyboardOpen] = useAtom(isKeyboardOpenAtom);
 
   const [keyboardLayout, setKeyboardLayout] = useState('default');
-  const [keyboardSystem, setKeyboardSystem] = useState('win');
-  const [keyboardLanguage, setKeyboardLanguage] = useState('en');
+  const [keyboardSystem, setKeyboardSystem] = useState(() => {
+    const system = storage.getKeyboardSystem();
+    return system && ['win', 'mac'].includes(system) ? system : 'win';
+  });
+  const [keyboardLanguage, setKeyboardLanguage] = useState(() => {
+    const language = storage.getKeyboardLanguage();
+    return language && ['en', 'fr', 'ru'].includes(language) ? language : 'en';
+  });
   const [activeModifierKeys, setActiveModifierKeys] = useState<string[]>([]);
 
+  const savedUi = useRef(storage.getVirtualKeyboardUi());
+  const nodeRef = useRef<HTMLDivElement | null>(null);
   const keyboardRef = useRef<any>(null);
+  const userMovedRef = useRef(!!savedUi.current);
+
+  const [position, setPosition] = useState({
+    x: savedUi.current?.x ?? 0,
+    y: savedUi.current?.y ?? 0
+  });
+  const [scale, setScale] = useState(() => clampScale(savedUi.current?.scale ?? 1));
+  const [collapsed, setCollapsed] = useState(() => savedUi.current?.collapsed ?? false);
+  const [isPlaced, setIsPlaced] = useState(() => !!savedUi.current);
+
+  const stateRef = useRef({ position, scale, collapsed });
+  stateRef.current = { position, scale, collapsed };
 
   const systems = [
     { value: 'win', icon: <WindowsOutlined /> },
@@ -49,16 +86,35 @@ export const VirtualKeyboard = () => {
     { value: 'ru', label: 'Russian' }
   ];
 
-  useEffect(() => {
-    const system = storage.getKeyboardSystem();
-    if (system && ['win', 'mac'].includes(system)) {
-      setKeyboardSystem(system);
+  const persist = useCallback((patch?: Partial<typeof stateRef.current>) => {
+    const next = { ...stateRef.current, ...patch };
+    storage.setVirtualKeyboardUi({
+      x: next.position.x,
+      y: next.position.y,
+      scale: next.scale,
+      collapsed: next.collapsed
+    });
+  }, []);
+
+  const syncPosition = useCallback(() => {
+    if (!nodeRef.current) return;
+
+    const { width, height } = nodeRef.current.getBoundingClientRect();
+
+    if (!userMovedRef.current) {
+      const next = {
+        x: Math.max(0, (window.innerWidth - width) / 2),
+        y: Math.max(0, window.innerHeight - height - 8)
+      };
+      setPosition((prev) => (prev.x === next.x && prev.y === next.y ? prev : next));
+      setIsPlaced(true);
+      return;
     }
 
-    const language = storage.getKeyboardLanguage();
-    if (language && languages.some((lng) => lng.value === language)) {
-      setKeyboardLanguage(language);
-    }
+    setPosition((prev) => {
+      const next = clampPosition(prev.x, prev.y, width, height);
+      return prev.x === next.x && prev.y === next.y ? prev : next;
+    });
   }, []);
 
   useEffect(() => {
@@ -80,6 +136,27 @@ export const VirtualKeyboard = () => {
 
     setKeyboardLayout('default');
   }, [keyboardSystem, keyboardLanguage]);
+
+  useLayoutEffect(() => {
+    if (!isKeyboardOpen || !nodeRef.current) return;
+    syncPosition();
+
+    const observer = new ResizeObserver(() => syncPosition());
+    observer.observe(nodeRef.current);
+    window.addEventListener('resize', syncPosition);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncPosition);
+    };
+  }, [isKeyboardOpen, collapsed, scale, isBigScreen, syncPosition]);
+
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasOpenRef.current && !isKeyboardOpen) {
+      persist();
+    }
+    wasOpenRef.current = isKeyboardOpen;
+  }, [isKeyboardOpen, persist]);
 
   // Press key
   function onKeyPress(key: string) {
@@ -203,86 +280,184 @@ export const VirtualKeyboard = () => {
     return theme;
   }
 
+  function onDrag(_e: DraggableEvent, data: DraggableData) {
+    userMovedRef.current = true;
+    setPosition({ x: data.x, y: data.y });
+  }
+
+  function onDragStop(_e: DraggableEvent, data: DraggableData) {
+    userMovedRef.current = true;
+    const next = { x: data.x, y: data.y };
+    setPosition(next);
+    persist({ position: next });
+  }
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    persist({ collapsed: next });
+  }
+
+  function closeKeyboard() {
+    persist();
+    setIsKeyboardOpen(false);
+  }
+
+  function onResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startScale = scale;
+    const startWidth = baseWidth * startScale;
+    let currentScale = startScale;
+
+    const onMove = (ev: PointerEvent) => {
+      currentScale = clampScale((startWidth + (ev.clientX - startX)) / baseWidth);
+      setScale(Number(currentScale.toFixed(3)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      persist({ scale: currentScale });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  if (!isKeyboardOpen) return null;
+
   return (
-    <Drawer.Root open={isKeyboardOpen} onOpenChange={setIsKeyboardOpen} modal={false}>
-      <Drawer.Portal>
-        <Drawer.Content
-          className={clsx(
-            'fixed bottom-0 left-0 right-0 z-[999] mx-auto overflow-hidden rounded bg-white outline-none',
-            isBigScreen ? 'w-[820px]' : 'w-[650px]'
-          )}
+    <Draggable
+      nodeRef={nodeRef}
+      handle=".vk-drag-handle"
+      cancel=".vk-no-drag"
+      bounds="html"
+      position={position}
+      onDrag={onDrag}
+      onStop={onDragStop}
+    >
+      <div
+        ref={nodeRef}
+        className={clsx(
+          'fixed left-0 top-0 z-[999] overflow-hidden rounded bg-white shadow-xl outline-none',
+          isPlaced ? 'opacity-100' : 'opacity-0'
+        )}
+        role="dialog"
+        aria-label={t('keyboard.virtual')}
+        style={{ width: baseWidth * scale }}
+      >
+        <div
+          className="vk-drag-handle flex cursor-move items-center justify-between whitespace-nowrap px-3 py-2"
+          role="toolbar"
+          tabIndex={0}
+          aria-label={t('keyboard.virtual')}
+          onDoubleClick={toggleCollapsed}
         >
-          <Drawer.Title className="m-0">
-            <div className="flex items-center justify-between px-3 py-2">
-              <ConfigProvider
-                theme={{
-                  algorithm: theme.defaultAlgorithm
-                }}
+          <ConfigProvider
+            theme={{
+              algorithm: theme.defaultAlgorithm
+            }}
+          >
+            <div className="flex items-center space-x-3">
+              <div
+                className="flex flex-shrink-0 items-center text-neutral-400"
+                role="button"
+                aria-label="Move"
               >
-                <div className="flex items-center space-x-5">
-                  <Select
+                <GripVerticalIcon size={16} />
+              </div>
+              <div className="vk-no-drag flex items-center space-x-5">
+                <Select
+                  size="small"
+                  style={{ minWidth: 90 }}
+                  value={keyboardLanguage}
+                  options={languages}
+                  onChange={selectLanguage}
+                />
+
+                {keyboardLanguage === 'en' && (
+                  <Segmented
                     size="small"
-                    style={{ minWidth: 90 }}
-                    defaultValue={keyboardLanguage}
-                    options={languages}
-                    onChange={selectLanguage}
+                    options={systems}
+                    value={keyboardSystem}
+                    onChange={selectSystem}
                   />
-
-                  {keyboardLanguage === 'en' && (
-                    <Segmented
-                      size="small"
-                      options={systems}
-                      value={keyboardSystem}
-                      onChange={selectSystem}
-                    />
-                  )}
-                </div>
-              </ConfigProvider>
-
-              <div className="flex w-[100px] items-center justify-end">
-                <div
-                  className="flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded text-neutral-600 hover:bg-neutral-300 hover:text-white"
-                  onClick={() => setIsKeyboardOpen(false)}
-                >
-                  <XIcon size={18} />
-                </div>
+                )}
               </div>
             </div>
-          </Drawer.Title>
+          </ConfigProvider>
 
-          <div className="h-px flex-shrink-0 border-b bg-neutral-300" />
-
-          <div data-vaul-no-drag className="keyboardContainer w-full">
-            {/* main keyboard */}
-            <Keyboard
-              buttonTheme={getButtonTheme()}
-              keyboardRef={(r) => (keyboardRef.current = r)}
-              onKeyPress={onKeyPress}
-              onKeyReleased={onKeyReleased}
-              layoutName={keyboardLayout}
-              {...keyboardOptions}
-            />
-
-            {/* control keyboard */}
-            {isBigScreen && (
-              <div className="controlArrows">
-                <Keyboard
-                  onKeyPress={onKeyPress}
-                  onKeyReleased={onKeyReleased}
-                  {...keyboardControlPadOptions}
-                />
-
-                <Keyboard
-                  onKeyPress={onKeyPress}
-                  onKeyReleased={onKeyReleased}
-                  {...keyboardArrowsOptions}
-                />
+          <div className="vk-no-drag flex items-center justify-end space-x-1">
+            <Tooltip
+              title={collapsed ? t('keyboard.expand') : t('keyboard.collapse')}
+              getPopupContainer={() => document.body}
+            >
+              <div
+                className="flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded text-neutral-600 hover:bg-neutral-300 hover:text-white"
+                role="button"
+                aria-label={collapsed ? t('keyboard.expand') : t('keyboard.collapse')}
+                onClick={toggleCollapsed}
+              >
+                {collapsed ? <ChevronUpIcon size={18} /> : <ChevronDownIcon size={18} />}
               </div>
-            )}
+            </Tooltip>
+            <div
+              className="flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded text-neutral-600 hover:bg-neutral-300 hover:text-white"
+              role="button"
+              aria-label="Close"
+              onClick={closeKeyboard}
+            >
+              <XIcon size={18} />
+            </div>
           </div>
-        </Drawer.Content>
-        <Drawer.Overlay />
-      </Drawer.Portal>
-    </Drawer.Root>
+        </div>
+
+        {!collapsed && (
+          <>
+            <div className="h-px flex-shrink-0 border-b bg-neutral-300" />
+
+            <div className="relative">
+              <div className="keyboardContainer" style={{ zoom: scale, width: baseWidth }}>
+                {/* main keyboard */}
+                <Keyboard
+                  buttonTheme={getButtonTheme()}
+                  keyboardRef={(r) => (keyboardRef.current = r)}
+                  onKeyPress={onKeyPress}
+                  onKeyReleased={onKeyReleased}
+                  layoutName={keyboardLayout}
+                  {...keyboardOptions}
+                />
+
+                {/* control keyboard */}
+                {isBigScreen && (
+                  <div className="controlArrows">
+                    <Keyboard
+                      onKeyPress={onKeyPress}
+                      onKeyReleased={onKeyReleased}
+                      {...keyboardControlPadOptions}
+                    />
+
+                    <Keyboard
+                      onKeyPress={onKeyPress}
+                      onKeyReleased={onKeyReleased}
+                      {...keyboardArrowsOptions}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="vk-resize-handle vk-no-drag"
+                aria-hidden="true"
+                onPointerDown={onResizePointerDown}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </Draggable>
   );
 };

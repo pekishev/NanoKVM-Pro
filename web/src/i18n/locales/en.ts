@@ -118,6 +118,8 @@ const en = {
       placeholder: 'Please input',
       submit: 'Submit',
       virtual: 'Keyboard',
+      collapse: 'Collapse',
+      expand: 'Expand',
       ctrlaltdel: 'Ctrl+Alt+Del',
       dropdownEnglish: 'English',
       dropdownRussian: 'Russian',

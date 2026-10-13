@@ -8,6 +8,7 @@ const MOUSE_SCROLL_INTERVAL_KEY = 'nanokvm-kvm-mouse-scroll-interval';
 const SKIP_UPDATE_KEY = 'nano-kvm-check-update';
 const KEYBOARD_SYSTEM_KEY = 'nano-kvm-keyboard-system';
 const KEYBOARD_LANGUAGE_KEY = 'nano-kvm-keyboard-language';
+const VIRTUAL_KEYBOARD_UI_KEY = 'nano-kvm-virtual-keyboard-ui';
 const SKIP_MODIFY_PASSWORD_KEY = 'nano-kvm-skip-modify-password';
 const SKIP_BROWSER_NOTIFICATION_KEY = 'nano-kvm-skip-browser-notification';
 const MENU_DISABLED_ITEMS_KEY = 'nano-kvm-menu-disabled-items';
@@ -173,4 +174,33 @@ export function getPowerConfirm() {
 
 export function setPowerConfirm(enabled: boolean) {
   localStorage.setItem(POWER_CONFIRM_KEY, String(enabled));
+}
+
+export type VirtualKeyboardUi = {
+  x: number;
+  y: number;
+  scale: number;
+  collapsed: boolean;
+};
+
+export function getVirtualKeyboardUi(): VirtualKeyboardUi | null {
+  const value = localStorage.getItem(VIRTUAL_KEYBOARD_UI_KEY);
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    const scale = Number(parsed.scale);
+    return {
+      x: Number(parsed.x) || 0,
+      y: Number(parsed.y) || 0,
+      scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+      collapsed: Boolean(parsed.collapsed)
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function setVirtualKeyboardUi(ui: VirtualKeyboardUi) {
+  localStorage.setItem(VIRTUAL_KEYBOARD_UI_KEY, JSON.stringify(ui));
 }

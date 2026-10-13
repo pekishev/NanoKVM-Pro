@@ -105,6 +105,8 @@ const ru = {
       placeholder: 'Текст для ввода',
       submit: 'Вставить',
       virtual: 'Клавиатура',
+      collapse: 'Свернуть',
+      expand: 'Развернуть',
       ctrlaltdel: 'Ctrl+Alt+Del',
       dropdownEnglish: 'Английский',
       dropdownRussian: 'Русский',
