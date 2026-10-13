@@ -1,27 +1,88 @@
-# NanoKVM-Pro
+# NanoKVM-Pro (community fork)
 
-> ## Code Availability
+[![Latest release](https://img.shields.io/github/v/release/pekishev/NanoKVM-Pro)](https://github.com/pekishev/NanoKVM-Pro/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/github/license/pekishev/NanoKVM-Pro)](LICENSE)
+
+> **This is a fork** of [sipeed/NanoKVM-Pro](https://github.com/sipeed/NanoKVM-Pro), not an official Sipeed release.
 >
-> - [x] **Frontend** (Released)
-> - [x] **Backend** (Released)
-> - [ ] **Support** (in development)
+> **Это форк** [sipeed/NanoKVM-Pro](https://github.com/sipeed/NanoKVM-Pro), а не официальная прошивка Sipeed.
 
-## Introduction
+The hardware, closed components, and most of the web UI still come from upstream. This repository adds Russian input, HID macros, on-device speech recognition, an MCP agent API, and GitHub-based updates.
 
-NanoKVM-Pro is the continuation of NanoKVM, inheriting the extreme compactness and powerful expandability of the NanoKVM series as an IP-KVM product.
-It has made a significant leap in performance, making it more suitable for remote working scenarios.
+Железо и закрытые компоненты — как у Sipeed. Здесь — русский ввод, HID-макросы, распознавание речи на устройстве, MCP для агентов и обновления с GitHub.
 
-To meet different user needs, NanoKVM-Pro offers two forms: NanoKVM-Desk and NanoKVM-ATX:
+**Latest build:** [Releases](https://github.com/pekishev/NanoKVM-Pro/releases/latest) (currently based on official **1.2.15**)
 
-![NanoKVM-Pro Desktop and ATX versions side by side](https://wiki.sipeed.com/hardware/assets/NanoKVM/pro/introduce/combine.png)
+## What's new in this fork
 
-- **NanoKVM-Desk** is the desktop version of NanoKVM-Pro, featuring an anodized matte metal shell. The front panel has a 1.47-inch touchscreen that displays core KVM information and allows for easy hardware function settings or can be used as a mini secondary screen, providing a more tactile user experience with the left-side infinite knob.
+### Keyboard and paste
 
-- **NanoKVM-ATX** is the internal version of NanoKVM-Pro, equipped with half-height/full-height brackets for installation inside a case. It allows for easier installation for host users with built-in USB cables and power control interfaces. Remote control can be achieved via external HDMI, network, and USB connections.
+- Russian layout on the virtual keyboard (plus English and French)
+- Mixed Russian/English paste: the current host layout is used, Alt+Shift is sent when the script switches language
+- Paste dialog: Alt+Shift, Enter, browser voice input, and **on-device Russian ASR** (no cloud)
+- Virtual keyboard is a floating window: drag, collapse, resize; position is remembered
 
-NanoKVM-Pro uses the AX630 as its main control core, featuring an ARM 1.2G dual-core A53 CPU. The external 1GB LPDDR4 memory provides strong computing support for remote desktop connections. It has built-in HDMI loop-out and capture chips, offering up to 4K60FPS HDMI loop-out and 4K45FPS video capture. Thanks to AX630's efficient and powerful image processing architecture, NanoKVM-Pro can transmit high-resolution images with very low latency, with typical delays as low as 60ms at 2K resolution.
+### HID macros
 
-## Specifications
+BadUSB-style scripts instead of the old Leader Key:
+
+- Record a key or chord into the script
+- `STRING`, special keys, `WIN+SHIFT+S` / `CTRL+ALT+DELETE`, `DELAY`
+- `MOVE` / `CLICK` / `DBLCLICK` in percent of the screen
+- `RUN OtherMacro` (one nesting level)
+- `WAITIMAGE name timeout` — wait until a saved HDMI fragment appears
+- Menu auto-hides while a macro is playing
+
+### Mouse
+
+- Extra mode **Absolute Simple** (`absolute-simple`) alongside absolute and relative
+
+### MCP (agents)
+
+Authenticated endpoint `/mcp` so an agent can drive the remote PC over HDMI + HID:
+
+`status`, `screenshot`, `click`, `type_keys`, `type_text`, `stop_type`, `press`
+
+Coordinates are full-frame HDMI pixels. Mixed EN/RU typing sends Alt+Shift by itself.
+
+### Updates
+
+- GitHub Releases in both the official `nanokvm_pro_*.tar.gz` format and a smaller `nanokvm-pro-*.tar.gz` (server + web)
+- Settings → Update can offer **fork releases**, a custom update server, or **disable checks**
+- Manual upload of a `.tar.gz` from the update page
+
+## Install / update
+
+On the device: **Settings → Update → Update Server**
+
+```text
+https://github.com/pekishev/NanoKVM-Pro/releases/latest/download
+```
+
+Then check for updates, or upload `nanokvm_pro_<version>.tar.gz` / `nanokvm-pro-<version>.tar.gz` from [Releases](https://github.com/pekishev/NanoKVM-Pro/releases).
+
+Manual copy of server + web (from `nanokvm-pro-*.tar.gz`):
+
+```bash
+scp NanoKVM-Server root@DEVICE:/kvmapp/server/NanoKVM-Server
+scp -r web root@DEVICE:/kvmapp/server/web.new
+ssh root@DEVICE 'rm -rf /kvmapp/server/web && mv /kvmapp/server/web.new /kvmapp/server/web && chmod +x /kvmapp/server/NanoKVM-Server && systemctl restart nanokvm'
+```
+
+---
+
+## Upstream hardware (Sipeed)
+
+NanoKVM-Pro is an IP-KVM based on AX630 (2×A53 @ 1.2 GHz, 1 GB LPDDR4). Typical delay is about 60 ms at 2K. Two form factors:
+
+- **NanoKVM-Desk** — metal case, 1.47" touchscreen, knob
+- **NanoKVM-ATX** — internal bracket, HDMI / network / USB out of the chassis
+
+![NanoKVM-Pro Desktop and ATX](https://wiki.sipeed.com/hardware/assets/NanoKVM/pro/introduce/combine.png)
+
+Frontend and backend of this tree are open; some support/firmware pieces remain closed upstream.
+
+### Specifications
 
 | Product       | NanoKVM-Pro | NanoKVM      | GxxKVM      | JxxKVM      |
 |---------------|----------|--------------|-------------|-------------|
@@ -54,18 +115,18 @@ NanoKVM-Pro uses the AX630 as its main control core, featuring an ARM 1.2G dual-
 | Power Input   | USB-C/PoE | USB-C/PoE/PCIe | USB-C       | USB-C       |
 | Dimensions     | 65x65x28mm | 40x36x36mm   | 80x60x7.5mm | 60x6x24-30mm |
 
-## Where to buy
+### Where to buy (official)
 
 - [AliExpress](https://www.aliexpress.com/item/1005010048471263.html)
-- [Pre-sale Page](https://sipeed.com/nanokvm/pro)
+- [Sipeed product page](https://sipeed.com/nanokvm/pro)
 
-## 💬 Community & Support
+### Upstream community
 
 - [Discord](https://discord.gg/V4sAZ9XWpN)
 - QQ group: 703230713
 - email: [support@sipeed.com](mailto:support@sipeed.com)
 - [FAQ](https://wiki.sipeed.com/hardware/en/kvm/NanoKVM_Pro/faq.html)
 
-## 📜 License
+## License
 
-This project is licensed under the GPL-3.0 License - see the LICENSE file for details.
+GPL-3.0 — see [LICENSE](LICENSE). This fork is not affiliated with Sipeed; use it at your own risk.
