@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -46,13 +45,11 @@ func tapSequence(modifier, keycode byte) []hidTap {
 	return seq
 }
 
-var hidMu sync.Mutex
-
 func withHID(fn func() error) error {
-	if !hidMu.TryLock() {
+	if !hid.TryLockHID() {
 		return fmt.Errorf("keyboard is busy")
 	}
-	defer hidMu.Unlock()
+	defer hid.UnlockHID()
 	return fn()
 }
 

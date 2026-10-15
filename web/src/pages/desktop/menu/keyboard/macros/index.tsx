@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Divider, Popover } from 'antd';
 import { useAtomValue } from 'jotai';
-import { PlayIcon } from 'lucide-react';
+import { CircleStopIcon, PlayIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/hid.ts';
@@ -31,6 +31,24 @@ export const Macros = () => {
     if (isMacroPlaying) {
       setIsOpen(false);
     }
+  }, [isMacroPlaying]);
+
+  useEffect(() => {
+    if (!isMacroPlaying) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      void stopPlaying();
+    }
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [isMacroPlaying]);
 
   async function getMacros() {
@@ -76,6 +94,14 @@ export const Macros = () => {
     }
   }
 
+  async function stopPlaying() {
+    try {
+      await api.stopMacro();
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
   function handleOpenChange(open: boolean) {
     if (open) {
       if (isMacroPlaying) {
@@ -95,7 +121,7 @@ export const Macros = () => {
       {macros.length > 0 ? (
         <>
           {macros.map((macro) => (
-            <MacroItem key={macro.id} macro={macro} macros={macros} />
+            <MacroItem key={macro.id} macro={macro} />
           ))}
           <Divider style={{ margin: '5px 0 5px 0' }} />
         </>
@@ -125,9 +151,16 @@ export const Macros = () => {
       destroyOnHidden={false}
       arrow={false}
     >
-      <div className="flex cursor-pointer select-none items-center space-x-2 rounded py-1 pl-2 pr-5 hover:bg-neutral-700/70">
-        <PlayIcon size={18} />
-        <span>{t('keyboard.macro.title')}</span>
+      <div
+        className="flex cursor-pointer select-none items-center space-x-2 rounded py-1 pl-2 pr-5 hover:bg-neutral-700/70"
+        onClick={() => {
+          if (isMacroPlaying) {
+            void stopPlaying();
+          }
+        }}
+      >
+        {isMacroPlaying ? <CircleStopIcon size={18} /> : <PlayIcon size={18} />}
+        <span>{isMacroPlaying ? t('keyboard.macro.stop') : t('keyboard.macro.title')}</span>
       </div>
     </Popover>
   );

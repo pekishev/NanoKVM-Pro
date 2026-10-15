@@ -31,7 +31,19 @@ const (
 var (
 	hid     *Hid
 	hidOnce sync.Once
+
+	activityHook func()
 )
+
+func SetActivityHook(fn func()) {
+	activityHook = fn
+}
+
+func noteActivity() {
+	if activityHook != nil {
+		activityHook()
+	}
+}
 
 func GetHid() *Hid {
 	hidOnce.Do(func() {
@@ -169,6 +181,7 @@ func (h *Hid) writeGadget(file **os.File, mu *sync.Mutex, path string, data []by
 		mu.Unlock()
 		if err == nil && n == len(data) {
 			log.Debugf("write to %s: %v", path, data)
+			noteActivity()
 			return nil
 		}
 		if err == nil {

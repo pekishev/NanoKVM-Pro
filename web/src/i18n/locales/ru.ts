@@ -153,6 +153,7 @@ const ru = {
         save: 'Сохранить',
         edit: 'Изменить',
         playing: 'Воспроизведение...',
+        stop: 'Стоп',
         stepsCount: '{{count}} ком.'
       }
     },

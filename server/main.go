@@ -14,6 +14,7 @@ import (
 	"NanoKVM-Server/logger"
 	"NanoKVM-Server/middleware"
 	"NanoKVM-Server/router"
+	"NanoKVM-Server/service/hid"
 	"NanoKVM-Server/service/vm/jiggler"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,9 @@ func initialize() {
 
 	// run mouse jiggler
 	jiggler.GetJiggler().Run()
+	hid.SetActivityHook(func() {
+		jiggler.GetJiggler().Update()
+	})
 
 	// waiting for exit signal
 	sigChan := make(chan os.Signal, 1)

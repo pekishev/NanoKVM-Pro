@@ -166,6 +166,7 @@ const en = {
         save: 'Save',
         edit: 'Edit',
         playing: 'Playing...',
+        stop: 'Stop',
         stepsCount: '{{count}} cmds'
       }
     },

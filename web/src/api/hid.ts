@@ -65,3 +65,11 @@ export function saveMacroImage(image: {
 export function getMacroImage(id: string, name: string) {
   return http.get('/api/hid/macro/image', { id, name });
 }
+
+export function runMacro(payload: { id?: string; name?: string }) {
+  return http.post('/api/hid/macro/run', payload, { timeout: 6 * 60 * 1000 });
+}
+
+export function stopMacro() {
+  return http.post('/api/hid/macro/stop');
+}

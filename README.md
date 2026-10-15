@@ -46,7 +46,9 @@ BadUSB-style scripts instead of the old Leader Key:
 - `MOVE` / `CLICK` / `DBLCLICK` in percent of the screen
 - `RUN OtherMacro` (one nesting level)
 - `WAITIMAGE name timeout` — wait until a saved HDMI fragment appears
-- Menu auto-hides while a macro is playing
+- Run a saved macro from a script: `POST /api/hid/macro/run` (Basic auth or JWT)
+- Stop from the web UI (Stop / Escape) or `POST /api/hid/macro/stop`
+- Playback runs on the device, not in the browser tab
 
 ### Mouse
 

@@ -52,6 +52,20 @@ type GetMacroImageReq struct {
 	Name string `form:"name" validate:"required,max=32"`
 }
 
+type RunMacroReq struct {
+	ID   string `json:"id" form:"id"`
+	Name string `json:"name" form:"name"`
+}
+
+type RunMacroRsp struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type StopMacroRsp struct {
+	Stopped bool `json:"stopped"`
+}
+
 type MacroImageRsp struct {
 	Name string  `json:"name"`
 	X    float64 `json:"x"`

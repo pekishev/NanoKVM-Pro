@@ -1,38 +1,52 @@
 import { useState } from 'react';
 import { notification } from 'antd';
 import type { TFunction } from 'i18next';
+import { getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
-import { playMacro } from './player.ts';
+import * as api from '@/api/hid.ts';
+import { isKeyboardEnableAtom } from '@/jotai/keyboard.ts';
+import { isMacroPlayingAtom } from '@/jotai/mouse.ts';
+
 import { countScriptCommands } from './script.ts';
 import type { Macro } from './types.ts';
 
 type MacroItemProps = {
   macro: Macro;
-  macros: Macro[];
 };
 
-export const MacroItem = ({ macro, macros }: MacroItemProps) => {
+export const MacroItem = ({ macro }: MacroItemProps) => {
   const { t } = useTranslation();
+  const isPlaying = useAtomValue(isMacroPlayingAtom);
+  const setPlaying = useSetAtom(isMacroPlayingAtom);
+  const setKeyboardEnable = useSetAtom(isKeyboardEnableAtom);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleClick() {
-    if (isLoading || !macro.script.trim()) return;
+    if (isLoading || isPlaying || !macro.id || !macro.script.trim()) return;
+
+    const store = getDefaultStore();
+    const previousKeyboard = store.get(isKeyboardEnableAtom);
+
     setIsLoading(true);
+    setKeyboardEnable(false);
+    setPlaying(true);
 
     try {
-      const error = await playMacro(macro, macros);
-      if (error) {
-        console.log(error);
-        notification.error({
-          message: describePlayError(error, t),
-          placement: 'topRight',
-          duration: 6
-        });
+      const rsp = await api.runMacro({ id: macro.id });
+      if (rsp.code === 0 || rsp.code === -4) {
+        return;
       }
+      notification.error({
+        message: describePlayError(rsp.msg, t),
+        placement: 'topRight',
+        duration: 6
+      });
     } catch (err) {
       console.log(err);
     } finally {
+      setPlaying(false);
+      setKeyboardEnable(previousKeyboard);
       setIsLoading(false);
     }
   }

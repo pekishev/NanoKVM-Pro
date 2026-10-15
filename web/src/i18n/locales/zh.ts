@@ -133,6 +133,7 @@ const zh = {
         save: '保存',
         edit: '编辑',
         playing: '正在播放...',
+        stop: '停止',
         stepsCount: '{{count}} 条'
       }
     },

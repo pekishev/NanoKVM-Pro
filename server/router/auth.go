@@ -9,6 +9,7 @@ import (
 
 func authRouter(r *gin.Engine) {
 	service := auth.NewService()
+	middleware.SetBasicVerifier(auth.CompareAccount)
 
 	r.POST("/api/auth/login", service.Login) // login
 

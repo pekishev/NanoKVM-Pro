@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strings"
@@ -12,6 +13,12 @@ import (
 
 	"NanoKVM-Server/config"
 )
+
+var verifyBasic func(username, password string) bool
+
+func SetBasicVerifier(fn func(username, password string) bool) {
+	verifyBasic = fn
+}
 
 type Token struct {
 	Username string `json:"username"`
@@ -44,6 +51,16 @@ func CheckToken() gin.HandlerFunc {
 			if _, err := ParseJWT(token); err == nil {
 				c.Next()
 				return
+			}
+		}
+
+		if verifyBasic != nil {
+			if username, password, ok := parseBasic(c.GetHeader("Authorization")); ok {
+				if verifyBasic(username, password) {
+					c.Next()
+					return
+				}
+				time.Sleep(2 * time.Second)
 			}
 		}
 
@@ -85,4 +102,20 @@ func ParseJWT(jwtToken string) (*Token, error) {
 	}
 
 	return nil, errors.New("invalid token")
+}
+
+func parseBasic(header string) (string, string, bool) {
+	const prefix = "Basic "
+	if !strings.HasPrefix(header, prefix) {
+		return "", "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(header[len(prefix):]))
+	if err != nil {
+		return "", "", false
+	}
+	username, password, ok := strings.Cut(string(raw), ":")
+	if !ok || username == "" {
+		return "", "", false
+	}
+	return username, password, true
 }
