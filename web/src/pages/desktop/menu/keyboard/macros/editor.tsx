@@ -14,7 +14,7 @@ import { CoordinatePicker } from './picker.tsx';
 import { applyRecordEvent, createRecordState } from './record.ts';
 import { RegionPicker } from './region.tsx';
 import { MACRO_IMAGE_NAME, MACRO_IMAGE_TIMEOUT_MAX, parseScript } from './script.ts';
-import type { Macro, ScreenRect } from './types.ts';
+import type { ImageRect, Macro } from './types.ts';
 
 interface EditorProps {
   macros: Macro[];
@@ -234,20 +234,15 @@ export const Editor = ({
     setIsModalOpen(false);
   }
 
-  async function handleRegion(rect: ScreenRect) {
+  async function handleRegion(rect: ImageRect) {
     const pick = imagePickRef.current;
     imagePickRef.current = null;
     setPickingKind(null);
     setIsModalOpen(true);
     if (!pick) return;
 
-    const frame = await captureScreenFrame();
-    if (!frame) {
-      setParseError(t('keyboard.macro.imageCaptureFailed'));
-      return;
-    }
-
-    const png = cropToPng(frame, rect);
+    const captured = await captureFromDevice(rect);
+    const png = captured?.png ?? (await cropFromScreen(rect));
     if (!png) {
       setParseError(t('keyboard.macro.imageCaptureFailed'));
       return;
@@ -255,7 +250,16 @@ export const Editor = ({
 
     setPendingImages((prev) => ({
       ...prev,
-      [pick.name]: { name: pick.name, x: rect.x, y: rect.y, w: rect.w, h: rect.h, png }
+      [pick.name]: {
+        name: pick.name,
+        x: captured?.x ?? rect.x,
+        y: captured?.y ?? rect.y,
+        w: captured?.w ?? rect.w,
+        h: captured?.h ?? rect.h,
+        frameW: captured?.frameW ?? rect.frameW,
+        frameH: captured?.frameH ?? rect.frameH,
+        png
+      }
     }));
     setDraft((prev) => {
       const script = prev.script.trimEnd();
@@ -263,6 +267,33 @@ export const Editor = ({
       return { ...prev, script: `${prefix}WAITIMAGE ${pick.name} ${pick.ms}\n` };
     });
     setParseError('');
+  }
+
+  async function captureFromDevice(rect: ImageRect) {
+    try {
+      const rsp = await api.captureMacroImage(rect);
+      if (rsp.code !== 0 || !rsp.data?.png) {
+        return null;
+      }
+      return {
+        x: Number(rsp.data.x),
+        y: Number(rsp.data.y),
+        w: Number(rsp.data.w),
+        h: Number(rsp.data.h),
+        frameW: Number(rsp.data.frameW) || rect.frameW,
+        frameH: Number(rsp.data.frameH) || rect.frameH,
+        png: String(rsp.data.png)
+      };
+    } catch (err) {
+      console.log(err);
+      return null;
+    }
+  }
+
+  async function cropFromScreen(rect: ImageRect) {
+    const frame = await captureScreenFrame();
+    if (!frame) return null;
+    return cropToPng(frame, rect);
   }
 
   async function handleSave() {

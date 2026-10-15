@@ -57,9 +57,22 @@ export function saveMacroImage(image: {
   y: number;
   w: number;
   h: number;
+  frameW: number;
+  frameH: number;
   png: string;
 }) {
   return http.post('/api/hid/macro/image', image);
+}
+
+export function captureMacroImage(rect: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  frameW: number;
+  frameH: number;
+}) {
+  return http.post('/api/hid/macro/image/capture', rect);
 }
 
 export function getMacroImage(id: string, name: string) {

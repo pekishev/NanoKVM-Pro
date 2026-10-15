@@ -39,6 +39,7 @@ var (
 	nowFn        = time.Now
 	grabFrameFn  = grabHDMIFrame
 	loadImageFn  = loadMacroImageRef
+	frameSizeFn  = hdmiFrameSize
 )
 
 func playMacro(ctx context.Context, macro proto.Macro, macros []proto.Macro) error {
@@ -83,13 +84,21 @@ func playCommand(
 		if err := ensureMouseFn(); err != nil {
 			return err
 		}
-		mouse.x, mouse.y = hidPos(command.X), hidPos(command.Y)
+		x, y, err := hidPixels(command.X, command.Y)
+		if err != nil {
+			return fmt.Errorf("%s: %w", macro.Name, err)
+		}
+		mouse.x, mouse.y = x, y
 		return moveTo(ctx, mouse.x, mouse.y)
 	case "click":
 		if err := ensureMouseFn(); err != nil {
 			return err
 		}
-		mouse.x, mouse.y = hidPos(command.X), hidPos(command.Y)
+		x, y, err := hidPixels(command.X, command.Y)
+		if err != nil {
+			return fmt.Errorf("%s: %w", macro.Name, err)
+		}
+		mouse.x, mouse.y = x, y
 		return clickAt(ctx, mouse.x, mouse.y, command.Button, command.Times)
 	case "key":
 		if err := ensureKeyboardFn(); err != nil {
@@ -260,8 +269,22 @@ func typeText(ctx context.Context, text string) error {
 	return nil
 }
 
-func hidPos(percent float64) uint16 {
-	n := percent / 100
+func hidPixels(x, y int) (uint16, uint16, error) {
+	fw, fh, err := frameSizeFn()
+	if err != nil {
+		return 0, 0, err
+	}
+	if fw < 1 || fh < 1 {
+		return 0, 0, fmt.Errorf("HDMI frame unavailable")
+	}
+	return hidPixel(x, fw), hidPixel(y, fh), nil
+}
+
+func hidPixel(px, size int) uint16 {
+	if size <= 0 {
+		return 0
+	}
+	n := (float64(px) + 0.5) / float64(size)
 	if n < 0 {
 		n = 0
 	}

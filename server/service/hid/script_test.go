@@ -11,9 +11,9 @@ REM ignored
 DELAY 500
 STRING Hello
 STRINGLN world
-MOVE 50 30
-CLICK 10 20 RIGHT
-DBLCLICK 1 2
+MOVE 960 540
+CLICK 371 67 RIGHT
+DBLCLICK 10 20
 WIN+SHIFT+S
 CTRL+ALT+DELETE
 ALT F4
@@ -29,9 +29,9 @@ WAITIMAGE boot-ok 20000
 		{Type: "delay", Ms: 500},
 		{Type: "string", Text: "Hello"},
 		{Type: "string", Text: "world\n"},
-		{Type: "move", X: 50, Y: 30},
-		{Type: "click", X: 10, Y: 20, Button: "right", Times: 1},
-		{Type: "click", X: 1, Y: 2, Button: "left", Times: 2},
+		{Type: "move", X: 960, Y: 540},
+		{Type: "click", X: 371, Y: 67, Button: "right", Times: 1},
+		{Type: "click", X: 10, Y: 20, Button: "left", Times: 2},
 		{Type: "key", Codes: []string{"MetaLeft", "ShiftLeft", "KeyS"}},
 		{Type: "key", Codes: []string{"ControlLeft", "AltLeft", "Delete"}},
 		{Type: "key", Codes: []string{"AltLeft", "F4"}},
@@ -54,7 +54,8 @@ func TestParseScriptRejectsBadLines(t *testing.T) {
 		{"DELAY", 1},
 		{"DELAY 70000", 1},
 		{"STRING", 1},
-		{"CLICK 200 10", 1},
+		{"CLICK 5000 10", 1},
+		{"CLICK 10.5 20", 1},
 		{"WAITIMAGE bad name 1000", 1},
 		{"WAITIMAGE boot 1000 extra", 1},
 		{"FOO", 1},

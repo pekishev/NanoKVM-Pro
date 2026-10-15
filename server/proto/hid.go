@@ -38,13 +38,24 @@ type DeleteMacroReq struct {
 }
 
 type SaveMacroImageReq struct {
-	ID   string  `json:"id" validate:"required"`
-	Name string  `json:"name" validate:"required,max=32"`
-	X    float64 `json:"x"`
-	Y    float64 `json:"y"`
-	W    float64 `json:"w"`
-	H    float64 `json:"h"`
-	Png  string  `json:"png" validate:"required"`
+	ID     string  `json:"id" validate:"required"`
+	Name   string  `json:"name" validate:"required,max=32"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	W      float64 `json:"w"`
+	H      float64 `json:"h"`
+	FrameW int     `json:"frameW"`
+	FrameH int     `json:"frameH"`
+	Png    string  `json:"png" validate:"required"`
+}
+
+type CaptureMacroImageReq struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	W      int `json:"w"`
+	H      int `json:"h"`
+	FrameW int `json:"frameW"`
+	FrameH int `json:"frameH"`
 }
 
 type GetMacroImageReq struct {
@@ -67,10 +78,12 @@ type StopMacroRsp struct {
 }
 
 type MacroImageRsp struct {
-	Name string  `json:"name"`
-	X    float64 `json:"x"`
-	Y    float64 `json:"y"`
-	W    float64 `json:"w"`
-	H    float64 `json:"h"`
-	Png  string  `json:"png"`
+	Name   string  `json:"name"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	W      float64 `json:"w"`
+	H      float64 `json:"h"`
+	FrameW int     `json:"frameW"`
+	FrameH int     `json:"frameH"`
+	Png    string  `json:"png"`
 }

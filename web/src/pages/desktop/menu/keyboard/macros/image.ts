@@ -1,31 +1,29 @@
 import { type ScreenFrame } from '@/lib/screen-capture.ts';
 
-import type { ScreenRect } from './types.ts';
+import type { ImageRect } from './types.ts';
 
-const MAX_EDGE = 96;
+const MAX_EDGE = 320;
 
-export type MacroImagePayload = ScreenRect & {
+export type MacroImagePayload = ImageRect & {
   name: string;
   png: string;
 };
 
-export function cropToPng(frame: ScreenFrame, rect: ScreenRect): string | null {
-  const region = regionPixels(frame, rect);
+export function cropToPng(frame: ScreenFrame, rect: ImageRect): string | null {
+  const region = clipRect(frame, rect);
   if (!region) return null;
+  if (region.w > MAX_EDGE || region.h > MAX_EDGE) return null;
 
-  const scale = Math.min(1, MAX_EDGE / Math.max(region.w, region.h));
-  const dw = Math.max(1, Math.round(region.w * scale));
-  const dh = Math.max(1, Math.round(region.h * scale));
-  const pixels = scaleCrop(frame, region, dw, dh);
+  const pixels = copyCrop(frame, region);
   if (!pixels) return null;
 
   const canvas = document.createElement('canvas');
-  canvas.width = dw;
-  canvas.height = dh;
+  canvas.width = region.w;
+  canvas.height = region.h;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   try {
-    ctx.putImageData(toImageData(pixels, dw, dh), 0, 0);
+    ctx.putImageData(toImageData(pixels, region.w, region.h), 0, 0);
   } catch {
     return null;
   }
@@ -36,38 +34,23 @@ export function cropToPng(frame: ScreenFrame, rect: ScreenRect): string | null {
 
 type PixelRect = { x: number; y: number; w: number; h: number };
 
-function regionPixels(frame: ScreenFrame, rect: ScreenRect): PixelRect | null {
-  if (!frame.width || !frame.height) return null;
-
-  const x = clamp(Math.round((frame.width * rect.x) / 100), 0, frame.width - 1);
-  const y = clamp(Math.round((frame.height * rect.y) / 100), 0, frame.height - 1);
-  const right = clamp(Math.round((frame.width * (rect.x + rect.w)) / 100), x + 1, frame.width);
-  const bottom = clamp(Math.round((frame.height * (rect.y + rect.h)) / 100), y + 1, frame.height);
-  return { x, y, w: right - x, h: bottom - y };
+function clipRect(frame: ScreenFrame, rect: ImageRect): PixelRect | null {
+  if (!frame.width || !frame.height || rect.w < 1 || rect.h < 1) return null;
+  const x = clamp(Math.round(rect.x), 0, frame.width - 1);
+  const y = clamp(Math.round(rect.y), 0, frame.height - 1);
+  const w = clamp(Math.round(rect.w), 1, frame.width - x);
+  const h = clamp(Math.round(rect.h), 1, frame.height - y);
+  return { x, y, w, h };
 }
 
-function scaleCrop(frame: ScreenFrame, region: PixelRect, dw: number, dh: number): Uint8ClampedArray | null {
-  if (dw < 1 || dh < 1) return null;
-
-  try {
-    const src = document.createElement('canvas');
-    src.width = frame.width;
-    src.height = frame.height;
-    const srcCtx = src.getContext('2d');
-    if (!srcCtx) return null;
-    srcCtx.putImageData(toImageData(frame.data, frame.width, frame.height), 0, 0);
-
-    const out = document.createElement('canvas');
-    out.width = dw;
-    out.height = dh;
-    const ctx = out.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(src, region.x, region.y, region.w, region.h, 0, 0, dw, dh);
-    return ctx.getImageData(0, 0, dw, dh).data;
-  } catch {
-    return null;
+function copyCrop(frame: ScreenFrame, region: PixelRect): Uint8ClampedArray | null {
+  const { x, y, w, h } = region;
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let row = 0; row < h; row += 1) {
+    const src = ((y + row) * frame.width + x) * 4;
+    out.set(frame.data.subarray(src, src + w * 4), row * w * 4);
   }
+  return out;
 }
 
 function clamp(value: number, min: number, max: number): number {

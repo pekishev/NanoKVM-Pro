@@ -16,6 +16,11 @@ export type ScreenRect = {
   h: number;
 };
 
+export type ImageRect = ScreenRect & {
+  frameW: number;
+  frameH: number;
+};
+
 export interface Macro {
   id?: string;
   name: string;

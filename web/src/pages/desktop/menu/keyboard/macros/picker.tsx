@@ -2,7 +2,7 @@ import { type MouseEvent, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { clientToScreenPercent } from '@/lib/coords.ts';
+import { clientToScreenPixel } from '@/lib/coords.ts';
 
 type PickerProps = {
   open: boolean;
@@ -36,7 +36,7 @@ export const CoordinatePicker = ({ open, onPick, onCancel }: PickerProps) => {
     event.preventDefault();
     event.stopPropagation();
 
-    const coords = clientToScreenPercent(event.clientX, event.clientY);
+    const coords = clientToScreenPixel(event.clientX, event.clientY);
     if (!coords) {
       onCancel();
       return;

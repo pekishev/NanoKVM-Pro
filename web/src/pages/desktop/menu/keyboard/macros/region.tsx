@@ -2,13 +2,13 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } f
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { clientToScreenPercent } from '@/lib/coords.ts';
+import { clientToScreenPixel } from '@/lib/coords.ts';
 
-import type { ScreenRect } from './types.ts';
+import type { ImageRect } from './types.ts';
 
 type RegionPickerProps = {
   open: boolean;
-  onPick: (rect: ScreenRect) => void;
+  onPick: (rect: ImageRect) => void;
   onCancel: () => void;
 };
 
@@ -61,20 +61,20 @@ export const RegionPicker = ({ open, onPick, onCancel }: RegionPickerProps) => {
     if (!start) return;
     if (Math.abs(event.clientX - start.x) < 8 || Math.abs(event.clientY - start.y) < 8) return;
 
-    const from = clientToScreenPercent(start.x, start.y);
-    const to = clientToScreenPercent(event.clientX, event.clientY);
-    if (!from || !to) {
+    const from = clientToScreenPixel(start.x, start.y);
+    const to = clientToScreenPixel(event.clientX, event.clientY);
+    if (!from || !to || from.width !== to.width || from.height !== to.height) {
       onCancel();
       return;
     }
 
     const x = Math.min(from.x, to.x);
     const y = Math.min(from.y, to.y);
-    const w = Math.round(Math.abs(from.x - to.x) * 100) / 100;
-    const h = Math.round(Math.abs(from.y - to.y) * 100) / 100;
-    if (w < 0.3 || h < 0.3) return;
+    const w = Math.max(1, Math.abs(from.x - to.x));
+    const h = Math.max(1, Math.abs(from.y - to.y));
+    if (w < 2 || h < 2) return;
 
-    onPick({ x, y, w, h });
+    onPick({ x, y, w, h, frameW: from.width, frameH: from.height });
   }
 
   return createPortal(

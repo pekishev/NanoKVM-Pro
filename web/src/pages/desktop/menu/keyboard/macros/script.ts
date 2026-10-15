@@ -52,6 +52,7 @@ const SPECIAL_KEYS: Record<string, string> = {
 
 export const MACRO_IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 export const MACRO_IMAGE_TIMEOUT_MAX = 300000;
+export const MACRO_PIXEL_MAX = 4096;
 
 const BUTTONS: Record<string, MouseButtonName> = {
   LEFT: 'left',
@@ -161,7 +162,7 @@ function parseMove(rest: string): ScriptCommand | string {
 function parseClick(name: string, rest: string): ScriptCommand | string {
   const point = parsePoint(name, rest, 3);
   if (typeof point === 'string') {
-    return point === 'coordinates must be 0..100 percent'
+    return point === 'coordinates must be pixels 0..4096'
       ? point
       : `${name} needs X Y [LEFT|RIGHT|MIDDLE]`;
   }
@@ -204,8 +205,8 @@ function parsePoint(
 
   const x = Number(parts[0]);
   const y = Number(parts[1]);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 100 || y < 0 || y > 100) {
-    return 'coordinates must be 0..100 percent';
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > MACRO_PIXEL_MAX || y > MACRO_PIXEL_MAX) {
+    return 'coordinates must be pixels 0..4096';
   }
 
   return { x, y, parts };

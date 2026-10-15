@@ -7,7 +7,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +27,7 @@ func restorePlayerHooks() {
 	nowFn = time.Now
 	grabFrameFn = grabHDMIFrame
 	loadImageFn = loadMacroImageRef
+	frameSizeFn = hdmiFrameSize
 }
 
 func TestPlayMacroSendsHIDReports(t *testing.T) {
@@ -46,10 +46,11 @@ func TestPlayMacroSendsHIDReports(t *testing.T) {
 		return nil
 	}
 	sleepFn = func(context.Context, time.Duration) error { return nil }
+	frameSizeFn = func() (int, int, error) { return 1920, 1080, nil }
 
 	err := playMacro(context.Background(), proto.Macro{
 		Name:   "demo",
-		Script: "STRING a\nENTER\nCLICK 50 50 RIGHT",
+		Script: "STRING a\nENTER\nCLICK 960 540 RIGHT",
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +69,7 @@ func TestPlayMacroSendsHIDReports(t *testing.T) {
 	if len(mouse) != 3 {
 		t.Fatalf("mouse reports = %d, %#v", len(mouse), mouse)
 	}
-	x, y := hidPos(50), hidPos(50)
+	x, y := hidPixel(960, 1920), hidPixel(540, 1080)
 	if mouse[1][0] != 0x02 {
 		t.Fatalf("right button down = %v", mouse[1])
 	}
@@ -127,7 +128,7 @@ func TestWaitImageMatchesReference(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	frame := solidFrame(20, 20, color.RGBA{R: 10, G: 20, B: 200, A: 255})
 	refPNG := mustPNGBytes(t, 4, 4, color.RGBA{R: 10, G: 20, B: 200, A: 255})
-	if err := writeMacroImage(id, "boot-ok", 0, 0, 20, 20, refPNG); err != nil {
+	if err := writeMacroImage(id, "boot-ok", pixelMeta(0, 0, 4, 4, 20, 20), refPNG); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,14 +171,37 @@ func TestLookupMacroByName(t *testing.T) {
 	}
 }
 
+func TestRegionMatchesExactPixels(t *testing.T) {
+	two := digitFrame(100, 100, 40, 50, 20, 16, 2)
+	one := digitFrame(100, 100, 40, 50, 20, 16, 1)
+	ref := cropRef(two, 40, 50, 20, 16)
+
+	matched, hasFrame := regionMatches(two, ref)
+	if !hasFrame || !matched {
+		t.Fatalf("digit 2 at saved pixels: matched=%v hasFrame=%v", matched, hasFrame)
+	}
+
+	matched, hasFrame = regionMatches(one, ref)
+	if !hasFrame {
+		t.Fatal("expected an HDMI frame")
+	}
+	if matched {
+		t.Fatal("digit 1 must not match a saved 2")
+	}
+
+	ref.Y = 34
+	matched, hasFrame = regionMatches(two, ref)
+	if !hasFrame {
+		t.Fatal("expected an HDMI frame")
+	}
+	if matched {
+		t.Fatal("must compare the saved pixels, not search nearby")
+	}
+}
+
 func TestRegionMatchesIdenticalCrop(t *testing.T) {
 	frame := solidFrame(12, 12, color.RGBA{R: 40, G: 80, B: 120, A: 255})
-	ref := &loadedMacroImage{
-		X: 0, Y: 0, W: 100, H: 100,
-		Width: 4, Height: 4,
-		Data: mustPixels(4, 4, color.RGBA{R: 40, G: 80, B: 120, A: 255}),
-	}
-	fillLuma(ref)
+	ref := cropRef(frame, 0, 0, 4, 4)
 	matched, hasFrame := regionMatches(frame, ref)
 	if !hasFrame || !matched {
 		t.Fatalf("matched=%v hasFrame=%v", matched, hasFrame)
@@ -188,6 +212,70 @@ func TestRegionMatchesIdenticalCrop(t *testing.T) {
 	if !hasFrame || matched {
 		t.Fatalf("different color matched=%v hasFrame=%v", matched, hasFrame)
 	}
+}
+
+func digitFrame(fw, fh, x, y, w, h, digit int) *rgbFrame {
+	pix := mustPixels(fw, fh, color.RGBA{R: 236, G: 236, B: 236, A: 255})
+	for yy := 0; yy < 6; yy++ {
+		for xx := 0; xx < w; xx++ {
+			setRGBA(pix, fw, x+xx, y+yy, color.RGBA{R: 40, G: 60, B: 180, A: 255})
+		}
+	}
+	ox, oy := x+6, y+7
+	switch digit {
+	case 1:
+		for yy := 0; yy < 8; yy++ {
+			setRGBA(pix, fw, ox+2, oy+yy, color.RGBA{A: 255})
+		}
+	default:
+		for xx := 0; xx < 5; xx++ {
+			setRGBA(pix, fw, ox+xx, oy, color.RGBA{A: 255})
+			setRGBA(pix, fw, ox+xx, oy+3, color.RGBA{A: 255})
+			setRGBA(pix, fw, ox+xx, oy+7, color.RGBA{A: 255})
+		}
+		for yy := 1; yy < 3; yy++ {
+			setRGBA(pix, fw, ox+4, oy+yy, color.RGBA{A: 255})
+		}
+		for yy := 4; yy < 7; yy++ {
+			setRGBA(pix, fw, ox, oy+yy, color.RGBA{A: 255})
+		}
+	}
+	return &rgbFrame{Width: fw, Height: fh, Pix: pix}
+}
+
+func cropRef(frame *rgbFrame, x, y, w, h int) *loadedMacroImage {
+	return &loadedMacroImage{
+		X:      x,
+		Y:      y,
+		W:      w,
+		H:      h,
+		FrameW: frame.Width,
+		FrameH: frame.Height,
+		Width:  w,
+		Height: h,
+		Data:   copyCrop(frame, x, y, w, h),
+	}
+}
+
+func pixelMeta(x, y, w, h, frameW, frameH int) macroImageMeta {
+	return macroImageMeta{
+		X: float64(x), Y: float64(y), W: float64(w), H: float64(h),
+		FrameW: frameW, FrameH: frameH,
+	}
+}
+
+func setRGBA(pix []byte, w, x, y int, c color.RGBA) {
+	if x < 0 || y < 0 || x >= w {
+		return
+	}
+	i := (y*w + x) * 4
+	if i < 0 || i+3 >= len(pix) {
+		return
+	}
+	pix[i] = c.R
+	pix[i+1] = c.G
+	pix[i+2] = c.B
+	pix[i+3] = c.A
 }
 
 func solidFrame(w, h int, c color.RGBA) *rgbFrame {
@@ -203,24 +291,6 @@ func mustPixels(w, h int, c color.RGBA) []byte {
 		pix[i*4+3] = c.A
 	}
 	return pix
-}
-
-func fillLuma(ref *loadedMacroImage) {
-	pixels := ref.Width * ref.Height
-	ref.Luma = make([]float64, pixels)
-	sum := 0.0
-	for i := 0; i < pixels; i++ {
-		k := i * 4
-		ref.Luma[i] = toLuma(ref.Data[k], ref.Data[k+1], ref.Data[k+2])
-		sum += ref.Luma[i]
-	}
-	ref.Mean = sum / float64(pixels)
-	variance := 0.0
-	for _, value := range ref.Luma {
-		d := value - ref.Mean
-		variance += d * d
-	}
-	ref.Std = math.Sqrt(variance / float64(pixels))
 }
 
 func mustPNGBytes(t *testing.T, w, h int, c color.RGBA) []byte {

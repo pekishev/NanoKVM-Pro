@@ -79,8 +79,8 @@ type scriptCommand struct {
 	Ms     int
 	Text   string
 	Codes  []string
-	X      float64
-	Y      float64
+	X      int
+	Y      int
 	Button string
 	Times  int
 	Name   string
@@ -192,7 +192,7 @@ func parseMove(rest string) (scriptCommand, error) {
 func parseClick(name, rest string) (scriptCommand, error) {
 	x, y, parts, err := parsePoint(name, rest, 3)
 	if err != nil {
-		if err.Error() != "coordinates must be 0..100 percent" {
+		if err.Error() != scriptPixelErr {
 			return scriptCommand{}, fmt.Errorf("%s needs X Y [LEFT|RIGHT|MIDDLE]", name)
 		}
 		return scriptCommand{}, err
@@ -221,22 +221,24 @@ func parseClick(name, rest string) (scriptCommand, error) {
 	return scriptCommand{Type: "click", X: x, Y: y, Button: button, Times: times}, nil
 }
 
-func parsePoint(name, rest string, maxParts int) (float64, float64, []string, error) {
+const scriptPixelErr = "coordinates must be pixels 0..4096"
+
+func parsePoint(name, rest string, maxParts int) (int, int, []string, error) {
 	parts := strings.Fields(rest)
 	if len(parts) < 2 || len(parts) > maxParts {
 		return 0, 0, nil, fmt.Errorf("%s needs X Y", name)
 	}
 
-	x, err := strconv.ParseFloat(parts[0], 64)
+	x, err := parseIntToken(parts[0])
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("coordinates must be 0..100 percent")
+		return 0, 0, nil, fmt.Errorf("%s", scriptPixelErr)
 	}
-	y, err := strconv.ParseFloat(parts[1], 64)
+	y, err := parseIntToken(parts[1])
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("coordinates must be 0..100 percent")
+		return 0, 0, nil, fmt.Errorf("%s", scriptPixelErr)
 	}
-	if x < 0 || x > 100 || y < 0 || y > 100 {
-		return 0, 0, nil, fmt.Errorf("coordinates must be 0..100 percent")
+	if x < 0 || y < 0 || x > maxMacroFrame || y > maxMacroFrame {
+		return 0, 0, nil, fmt.Errorf("%s", scriptPixelErr)
 	}
 	return x, y, parts, nil
 }

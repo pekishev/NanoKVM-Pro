@@ -20,6 +20,7 @@ func hidRouter(r *gin.Engine) {
 	api.POST("/hid/macro/update", service.UpdateMacro) // update macro
 	api.DELETE("/hid/macro", service.DeleteMacro)      // delete macro
 	api.POST("/hid/macro/image", service.SaveMacroImage)
+	api.POST("/hid/macro/image/capture", service.CaptureMacroImage)
 	api.GET("/hid/macro/image", service.GetMacroImage)
 	api.POST("/hid/macro/run", service.RunMacro)   // run a saved macro on the device
 	api.POST("/hid/macro/stop", service.StopMacro) // cancel a running API macro

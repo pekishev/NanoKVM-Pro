@@ -1,3 +1,5 @@
+import { getScreenElement } from '@/lib/video-transform.ts';
+
 export type ScreenFrame = {
   width: number;
   height: number;
@@ -52,7 +54,7 @@ export async function captureScreenFrame(): Promise<ScreenFrame | null> {
 }
 
 function findScreenMedia(): HTMLVideoElement | HTMLImageElement | HTMLCanvasElement | null {
-  const screen = document.getElementById('screen');
+  const screen = getScreenElement();
   if (!screen) return null;
   if (
     screen instanceof HTMLVideoElement ||

@@ -13,6 +13,15 @@ import (
 
 const snapshotQuality uint16 = 100
 
+func hdmiFrameSize() (int, int, error) {
+	screen := common.GetScreen()
+	screen.RefreshSize()
+	if screen.Width == 0 || screen.Height == 0 {
+		return 0, 0, fmt.Errorf("no HDMI frame")
+	}
+	return int(screen.Width), int(screen.Height), nil
+}
+
 func grabHDMIFrame() (*rgbFrame, error) {
 	data, err := grabMJPEG()
 	if err != nil {

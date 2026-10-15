@@ -43,7 +43,7 @@ BadUSB-style scripts instead of the old Leader Key:
 
 - Record a key or chord into the script
 - `STRING`, special keys, `WIN+SHIFT+S` / `CTRL+ALT+DELETE`, `DELAY`
-- `MOVE` / `CLICK` / `DBLCLICK` in percent of the screen
+- `MOVE` / `CLICK` / `DBLCLICK` in HDMI pixels, origin (0,0) top-left
 - `RUN OtherMacro` (one nesting level)
 - `WAITIMAGE name timeout` — wait until a saved HDMI fragment appears
 - Run a saved macro from a script: `POST /api/hid/macro/run` (Basic auth or JWT)
