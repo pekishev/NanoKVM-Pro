@@ -66,6 +66,8 @@ export const Absolute = () => {
   const TAP_THRESHOLD = 8;
   const DRAG_THRESHOLD = 10;
   const VELOCITY_THRESHOLD = 0.3;
+  const TWO_FINGER_RIGHT_CLICK_MS = 400;
+  const TWO_FINGER_TAP_SLOP = 24;
 
   useEffect(() => {
     const screenElement = getScreenElement();
@@ -100,7 +102,17 @@ export const Absolute = () => {
       layoutTop: 0
     };
     const pan = { active: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+    const lastAimClient = { clientX: 0, clientY: 0 };
+    const twoFingerTap = {
+      active: false,
+      id: -1,
+      startTime: 0,
+      startX: 0,
+      startY: 0
+    };
     let touchOnScreen = false;
+    // After a second finger joins, the original finger must not become a left click.
+    let skipTap = false;
 
     if (isSimple) {
       gestureSurface.addEventListener('touchstart', handleSimpleTouchStart, { passive: false });
@@ -290,6 +302,63 @@ export const Absolute = () => {
       lastScrollTimeRef.current = currentTime;
     }
 
+    function resetTwoFingerTap() {
+      twoFingerTap.active = false;
+      twoFingerTap.id = -1;
+    }
+
+    function sendRightClickPulse() {
+      const { x, y } = getCoordinate(lastAimClient);
+      handleMouseEvent({ type: 'move', x, y });
+      handleMouseEvent({ type: 'mousedown', button: MouseButton.Right });
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      const timer = setTimeout(() => {
+        handleMouseEvent({ type: 'mouseup', button: MouseButton.Right });
+        tapReleaseTimersRef.current.delete(timer);
+      }, 50);
+      tapReleaseTimersRef.current.add(timer);
+    }
+
+    function findChangedTouch(e: TouchEvent, id: number) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === id) {
+          return e.changedTouches[i];
+        }
+      }
+      return null;
+    }
+
+    // First finger aims; a short second-finger tap nearby is a right click.
+    // Pinch and two-finger scroll still win once they arm.
+    function tryTwoFingerRightClick(e: TouchEvent) {
+      if (!twoFingerTap.active) {
+        return false;
+      }
+
+      const ended = findChangedTouch(e, twoFingerTap.id);
+      if (!ended) {
+        return false;
+      }
+
+      const duration = Date.now() - twoFingerTap.startTime;
+      const dist = Math.hypot(ended.clientX - twoFingerTap.startX, ended.clientY - twoFingerTap.startY);
+      const ok =
+        touchOnScreen &&
+        twoFinger.mode === 'pending' &&
+        duration <= TWO_FINGER_RIGHT_CLICK_MS &&
+        dist <= TWO_FINGER_TAP_SLOP;
+
+      resetTwoFingerTap();
+      if (!ok) {
+        return false;
+      }
+
+      sendRightClickPulse();
+      return true;
+    }
+
     // Absolute Simple keeps browser zoom out of the way: pinch and pan are our own
     // transform, so they still work when fullscreen locks the visual viewport.
     function handleSimpleTouchStart(e: TouchEvent) {
@@ -298,7 +367,39 @@ export const Absolute = () => {
       }
 
       holdOffSyntheticMouse();
-      clearLongPress();
+
+      if (e.touches.length > 1) {
+        e.preventDefault();
+        clearLongPress();
+        skipTap = true;
+        pan.active = false;
+
+        if (pressedButtonRef.current !== null) {
+          handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
+          pressedButtonRef.current = null;
+        }
+
+        if (e.touches.length === 2) {
+          if (!touchOnScreen) {
+            const aim = e.touches[0];
+            touchOnScreen = isOverScreen(aim.clientX, aim.clientY);
+            lastAimClient.clientX = aim.clientX;
+            lastAimClient.clientY = aim.clientY;
+          }
+          const second =
+            e.changedTouches.length > 1 ? e.changedTouches[1] : e.changedTouches[0];
+          twoFingerTap.active = true;
+          twoFingerTap.id = second.identifier;
+          twoFingerTap.startTime = Date.now();
+          twoFingerTap.startX = second.clientX;
+          twoFingerTap.startY = second.clientY;
+        } else {
+          resetTwoFingerTap();
+        }
+
+        beginTwoFinger(e.touches);
+        return;
+      }
 
       if (pressedButtonRef.current !== null) {
         handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
@@ -311,15 +412,11 @@ export const Absolute = () => {
       hasMoveRef.current = false;
       isDraggingRef.current = false;
       pan.active = false;
+      skipTap = false;
+      resetTwoFingerTap();
       touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
-
-      if (e.touches.length > 1) {
-        e.preventDefault();
-        hasMoveRef.current = true;
-        touchOnScreen = false;
-        beginTwoFinger(e.touches);
-        return;
-      }
+      lastAimClient.clientX = touch.clientX;
+      lastAimClient.clientY = touch.clientY;
 
       twoFinger.mode = 'pending';
       twoFinger.startDist = 0;
@@ -328,6 +425,9 @@ export const Absolute = () => {
         return;
       }
 
+      // Block Chrome/Android image menus so the remote click owns the gesture.
+      e.preventDefault();
+
       longPressTimerRef.current = setTimeout(() => {
         isLongPressRef.current = true;
         pressedButtonRef.current = MouseButton.Right;
@@ -335,10 +435,7 @@ export const Absolute = () => {
           navigator.vibrate(50);
         }
 
-        const { x, y } = getCoordinate({
-          clientX: touchStartPosRef.current.x,
-          clientY: touchStartPosRef.current.y
-        });
+        const { x, y } = getCoordinate(lastAimClient);
         handleMouseEvent({ type: 'move', x, y });
         handleMouseEvent({ type: 'mousedown', button: MouseButton.Right });
       }, 800);
@@ -354,7 +451,6 @@ export const Absolute = () => {
       if (e.touches.length > 1) {
         e.preventDefault();
         clearLongPress();
-        hasMoveRef.current = true;
         pan.active = false;
 
         if (twoFinger.startDist <= 0) {
@@ -370,8 +466,10 @@ export const Absolute = () => {
         if (twoFinger.mode === 'pending') {
           if (distDelta > PINCH_ARM && distDelta >= scrollDelta) {
             twoFinger.mode = 'pinch';
+            resetTwoFingerTap();
           } else if (scrollDelta > SCROLL_ARM && scrollDelta > distDelta * 1.5) {
             twoFinger.mode = 'scroll';
+            resetTwoFingerTap();
           } else {
             return;
           }
@@ -388,6 +486,8 @@ export const Absolute = () => {
       }
 
       const touch = e.touches[0];
+      lastAimClient.clientX = touch.clientX;
+      lastAimClient.clientY = touch.clientY;
       const deltaX = touch.clientX - touchStartPosRef.current.x;
       const deltaY = touch.clientY - touchStartPosRef.current.y;
       if (Math.hypot(deltaX, deltaY) <= TAP_THRESHOLD) {
@@ -418,9 +518,9 @@ export const Absolute = () => {
     function handleSimpleTouchEnd(e: TouchEvent) {
       holdOffSyntheticMouse();
       clearLongPress();
+      tryTwoFingerRightClick(e);
 
       if (e.touches.length > 0) {
-        hasMoveRef.current = true;
         pan.active = false;
         if (pressedButtonRef.current !== null) {
           handleMouseEvent({ type: 'mouseup', button: pressedButtonRef.current });
@@ -429,6 +529,8 @@ export const Absolute = () => {
         if (e.touches.length === 1) {
           twoFinger.startDist = 0;
           twoFinger.mode = 'pending';
+        } else {
+          resetTwoFingerTap();
         }
         return;
       }
@@ -437,6 +539,7 @@ export const Absolute = () => {
       if (
         touch &&
         touchOnScreen &&
+        !skipTap &&
         !hasMoveRef.current &&
         !isLongPressRef.current &&
         twoFinger.mode !== 'pinch' &&
@@ -457,6 +560,8 @@ export const Absolute = () => {
       isDraggingRef.current = false;
       pressedButtonRef.current = null;
       pan.active = false;
+      skipTap = false;
+      resetTwoFingerTap();
       touchOnScreen = false;
       twoFinger.mode = 'pending';
       twoFinger.startDist = 0;
@@ -475,6 +580,8 @@ export const Absolute = () => {
       isDraggingRef.current = false;
       pressedButtonRef.current = null;
       pan.active = false;
+      skipTap = false;
+      resetTwoFingerTap();
       touchOnScreen = false;
       twoFinger.mode = 'pending';
       twoFinger.startDist = 0;
