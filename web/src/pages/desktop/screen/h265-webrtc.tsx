@@ -4,6 +4,8 @@ import clsx from 'clsx';
 import { useAtom, useAtomValue } from 'jotai';
 
 import * as api from '@/api/stream.ts';
+import { getIceServers } from '@/lib/video.ts';
+import { useHdmiAudio } from '@/hooks/use-hdmi-audio.ts';
 import { microphoneEnabledAtom } from '@/jotai/audio.ts';
 import { mouseStyleAtom } from '@/jotai/mouse.ts';
 import { videoParametersAtom, videoVolumeAtom } from '@/jotai/screen.ts';
@@ -70,6 +72,7 @@ export const H265Webrtc = () => {
   const mouseStyle = useAtomValue(mouseStyleAtom);
   const [volume, setVolume] = useAtom(videoVolumeAtom);
   const [micEnabled, setMicEnabled] = useAtom(microphoneEnabledAtom);
+  const { enabled: hdmiAudioEnabled, loaded: hdmiAudioLoaded } = useHdmiAudio();
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -87,13 +90,18 @@ export const H265Webrtc = () => {
   const micSenderRef = useRef<RTCRtpSender | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
+  const sendMsgRef = useRef<(event: string, data: string) => void>(() => {});
 
   useEffect(() => {
+    if (!hdmiAudioLoaded) {
+      return;
+    }
+
     const ws = api.webrtcH265();
 
-    const iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
+    const iceServers = getIceServers();
     const video = new RTCPeerConnection({ iceServers });
-    const audio = new RTCPeerConnection({ iceServers });
+    const audio = hdmiAudioEnabled ? new RTCPeerConnection({ iceServers }) : null;
 
     const handleVideoAnswer = createAnswerHandler(
       video,
@@ -101,14 +109,13 @@ export const H265Webrtc = () => {
       videoIceCandidates,
       'video'
     );
-    const handleAudioAnswer = createAnswerHandler(
-      audio,
-      audioOfferSent,
-      audioIceCandidates,
-      'audio'
-    );
+    const handleAudioAnswer = audio
+      ? createAnswerHandler(audio, audioOfferSent, audioIceCandidates, 'audio')
+      : undefined;
     const handleVideoCandidate = createCandidateHandler(video, videoIceCandidates, 'video');
-    const handleAudioCandidate = createCandidateHandler(audio, audioIceCandidates, 'audio');
+    const handleAudioCandidate = audio
+      ? createCandidateHandler(audio, audioIceCandidates, 'audio')
+      : undefined;
 
     const sendMsg = (event: string, data: string) => {
       if (ws.readyState !== WebSocket.OPEN) {
@@ -122,6 +129,7 @@ export const H265Webrtc = () => {
         console.error('Error sending event:', err);
       }
     };
+    sendMsgRef.current = sendMsg;
 
     // --- Init Video ---
     video.onnegotiationneeded = async () => {
@@ -145,8 +153,8 @@ export const H265Webrtc = () => {
       }
     };
 
-    video.onconnectionstatechange = () => {
-      if (video.iceConnectionState === 'connected') {
+    video.oniceconnectionstatechange = () => {
+      if (video.iceConnectionState === 'connected' || video.iceConnectionState === 'completed') {
         setIsLoading(false);
       }
     };
@@ -154,36 +162,38 @@ export const H265Webrtc = () => {
     video.ontrack = (event) => {
       if (videoRef.current && event.track.kind === 'video') {
         videoRef.current.srcObject = new MediaStream([event.track]);
+        videoRef.current.play().catch(() => undefined);
       }
     };
 
-    // --- Init Audio ---
-    audio.onnegotiationneeded = async () => {
-      if (audioOfferSent.current || audio.signalingState !== 'stable') {
-        console.log('Skipping audio negotiation - Waiting for answer or state unstable');
-        return;
-      }
+    if (audio) {
+      audio.onnegotiationneeded = async () => {
+        if (audioOfferSent.current || audio.signalingState !== 'stable') {
+          console.log('Skipping audio negotiation - Waiting for answer or state unstable');
+          return;
+        }
 
-      try {
-        audioOfferSent.current = true;
-        const offer = await audio.createOffer({
-          offerToReceiveVideo: false,
-          offerToReceiveAudio: true
-        });
+        try {
+          audioOfferSent.current = true;
+          const offer = await audio.createOffer({
+            offerToReceiveVideo: false,
+            offerToReceiveAudio: true
+          });
 
-        await audio.setLocalDescription(offer);
-        sendMsg('audio-offer', JSON.stringify(audio.localDescription));
-      } catch (error) {
-        audioOfferSent.current = false;
-        console.error('Audio negotiation failed:', error);
-      }
-    };
+          await audio.setLocalDescription(offer);
+          sendMsg('audio-offer', JSON.stringify(audio.localDescription));
+        } catch (error) {
+          audioOfferSent.current = false;
+          console.error('Audio negotiation failed:', error);
+        }
+      };
 
-    audio.ontrack = (event) => {
-      if (audioRef.current && event.track.kind === 'audio') {
-        audioRef.current.srcObject = new MediaStream([event.track]);
-      }
-    };
+      audio.ontrack = (event) => {
+        if (audioRef.current && event.track.kind === 'audio') {
+          audioRef.current.srcObject = new MediaStream([event.track]);
+        }
+      };
+    }
 
     // --- WebSocket Message Handling ---
     ws.onopen = () => {
@@ -196,11 +206,15 @@ export const H265Webrtc = () => {
         }
       };
 
-      audio.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendMsg('audio-candidate', JSON.stringify(event.candidate));
-        }
-      };
+      if (audio) {
+        audio.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendMsg('audio-candidate', JSON.stringify(event.candidate));
+          }
+        };
+        audio.addTransceiver('audio', { direction: 'sendrecv' });
+        audioConnectionRef.current = audio;
+      }
 
       // add video transceiver
       const videoTransceiver = video.addTransceiver('video', { direction: 'recvonly' });
@@ -213,9 +227,6 @@ export const H265Webrtc = () => {
           console.warn('H.265 codec not supported by this browser.');
         }
       }
-
-      audio.addTransceiver('audio', { direction: 'sendrecv' });
-      audioConnectionRef.current = audio;
     };
 
     ws.onmessage = (event) => {
@@ -234,10 +245,10 @@ export const H265Webrtc = () => {
             handleVideoCandidate(data);
             break;
           case 'audio-answer':
-            handleAudioAnswer(data);
+            handleAudioAnswer?.(data);
             break;
           case 'audio-candidate':
-            handleAudioCandidate(data);
+            handleAudioCandidate?.(data);
             break;
           case 'heartbeat':
             break;
@@ -263,7 +274,8 @@ export const H265Webrtc = () => {
       }
 
       video.close();
-      audio.close();
+      audio?.close();
+      audioConnectionRef.current = null;
 
       videoOfferSent.current = false;
       audioOfferSent.current = false;
@@ -280,23 +292,24 @@ export const H265Webrtc = () => {
       micSenderRef.current = null;
       micTrackRef.current = null;
     };
-  }, []);
+  }, [hdmiAudioLoaded, hdmiAudioEnabled, setVolume]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement) return;
 
-    if (volume > 0) {
+    if (volume > 0 && hdmiAudioEnabled) {
       if (audioElement.paused) {
         audioElement.play().catch(console.error);
       }
       if (audioElement.muted) {
         audioElement.muted = false;
       }
+      sendMsgRef.current('audio-start', '1');
     }
 
     audioElement.volume = volume / 100;
-  }, [volume]);
+  }, [volume, hdmiAudioEnabled]);
 
   // Handle microphone enable/disable
   useEffect(() => {

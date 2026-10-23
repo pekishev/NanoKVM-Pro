@@ -5,7 +5,9 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import * as api from '@/api/stream.ts';
 import { VideoStatus } from '@/types';
+import { getIceServers } from '@/lib/video.ts';
 import { getVideoRotationStyle, getVideoSizeStyle, isQuarterTurn } from '@/lib/video-transform.ts';
+import { useHdmiAudio } from '@/hooks/use-hdmi-audio.ts';
 import { microphoneEnabledAtom } from '@/jotai/audio.ts';
 import { mouseStyleAtom } from '@/jotai/mouse.ts';
 import { videoParametersAtom, videoStatusAtom, videoVolumeAtom } from '@/jotai/screen.ts';
@@ -73,6 +75,7 @@ export const H264Webrtc = () => {
   const setVideoStatus = useSetAtom(videoStatusAtom);
   const [volume, setVolume] = useAtom(videoVolumeAtom);
   const [micEnabled, setMicEnabled] = useAtom(microphoneEnabledAtom);
+  const { enabled: hdmiAudioEnabled, loaded: hdmiAudioLoaded } = useHdmiAudio();
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,13 +94,18 @@ export const H264Webrtc = () => {
   const micSenderRef = useRef<RTCRtpSender | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
+  const sendMsgRef = useRef<(event: string, data: string) => void>(() => {});
 
   useEffect(() => {
+    if (!hdmiAudioLoaded) {
+      return;
+    }
+
     const ws = api.webrtcH264();
 
-    const iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
+    const iceServers = getIceServers();
     const video = new RTCPeerConnection({ iceServers });
-    const audio = new RTCPeerConnection({ iceServers });
+    const audio = hdmiAudioEnabled ? new RTCPeerConnection({ iceServers }) : null;
 
     const handleVideoAnswer = createAnswerHandler(
       video,
@@ -105,14 +113,18 @@ export const H264Webrtc = () => {
       videoIceCandidates,
       'video'
     );
-    const handleAudioAnswer = createAnswerHandler(
-      audio,
-      audioOfferSent,
-      audioIceCandidates,
-      'audio'
-    );
+    const handleAudioAnswer = audio
+      ? createAnswerHandler(audio, audioOfferSent, audioIceCandidates, 'audio')
+      : undefined;
     const handleVideoCandidate = createCandidateHandler(video, videoIceCandidates, 'video');
-    const handleAudioCandidate = createCandidateHandler(audio, audioIceCandidates, 'audio');
+    const handleAudioCandidate = audio
+      ? createCandidateHandler(audio, audioIceCandidates, 'audio')
+      : undefined;
+
+    const videoHasPicture = () => {
+      const el = videoRef.current;
+      return !!el && el.videoWidth > 0 && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+    };
 
     const handleVideoStatus = (data: number) => {
       switch (data) {
@@ -122,11 +134,11 @@ export const H264Webrtc = () => {
           break;
         case -1:
           setVideoStatus(VideoStatus.NoImage);
-          setIsPlaying(false);
+          setIsPlaying(videoHasPicture());
           break;
         case -4:
           setVideoStatus(VideoStatus.InconsistentVideoMode);
-          setIsPlaying(false);
+          setIsPlaying(videoHasPicture());
           break;
         default:
           console.log('Unhandled video status:', data);
@@ -146,6 +158,7 @@ export const H264Webrtc = () => {
         console.error('Error sending event:', err);
       }
     };
+    sendMsgRef.current = sendMsg;
 
     // --- Init Video ---
     video.onnegotiationneeded = async () => {
@@ -169,8 +182,8 @@ export const H264Webrtc = () => {
       }
     };
 
-    video.onconnectionstatechange = () => {
-      if (video.iceConnectionState === 'connected') {
+    video.oniceconnectionstatechange = () => {
+      if (video.iceConnectionState === 'connected' || video.iceConnectionState === 'completed') {
         setIsLoading(false);
       }
     };
@@ -178,36 +191,38 @@ export const H264Webrtc = () => {
     video.ontrack = (event) => {
       if (videoRef.current && event.track.kind === 'video') {
         videoRef.current.srcObject = new MediaStream([event.track]);
+        videoRef.current.play().catch(() => undefined);
       }
     };
 
-    // --- Init Audio ---
-    audio.onnegotiationneeded = async () => {
-      if (audioOfferSent.current || audio.signalingState !== 'stable') {
-        console.log('Skipping audio negotiation - Waiting for answer or state unstable');
-        return;
-      }
+    if (audio) {
+      audio.onnegotiationneeded = async () => {
+        if (audioOfferSent.current || audio.signalingState !== 'stable') {
+          console.log('Skipping audio negotiation - Waiting for answer or state unstable');
+          return;
+        }
 
-      try {
-        audioOfferSent.current = true;
-        const offer = await audio.createOffer({
-          offerToReceiveVideo: false,
-          offerToReceiveAudio: true
-        });
+        try {
+          audioOfferSent.current = true;
+          const offer = await audio.createOffer({
+            offerToReceiveVideo: false,
+            offerToReceiveAudio: true
+          });
 
-        await audio.setLocalDescription(offer);
-        sendMsg('audio-offer', JSON.stringify(audio.localDescription));
-      } catch (error) {
-        audioOfferSent.current = false;
-        console.error('Audio negotiation failed:', error);
-      }
-    };
+          await audio.setLocalDescription(offer);
+          sendMsg('audio-offer', JSON.stringify(audio.localDescription));
+        } catch (error) {
+          audioOfferSent.current = false;
+          console.error('Audio negotiation failed:', error);
+        }
+      };
 
-    audio.ontrack = (event) => {
-      if (audioRef.current && event.track.kind === 'audio') {
-        audioRef.current.srcObject = new MediaStream([event.track]);
-      }
-    };
+      audio.ontrack = (event) => {
+        if (audioRef.current && event.track.kind === 'audio') {
+          audioRef.current.srcObject = new MediaStream([event.track]);
+        }
+      };
+    }
 
     // --- WebSocket Message Handling ---
     ws.onopen = () => {
@@ -220,16 +235,17 @@ export const H264Webrtc = () => {
         }
       };
 
-      audio.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendMsg('audio-candidate', JSON.stringify(event.candidate));
-        }
-      };
+      if (audio) {
+        audio.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendMsg('audio-candidate', JSON.stringify(event.candidate));
+          }
+        };
+        audio.addTransceiver('audio', { direction: 'sendrecv' });
+        audioConnectionRef.current = audio;
+      }
 
       video.addTransceiver('video', { direction: 'recvonly' });
-      audio.addTransceiver('audio', { direction: 'sendrecv' });
-
-      audioConnectionRef.current = audio;
     };
 
     ws.onmessage = (event) => {
@@ -248,10 +264,10 @@ export const H264Webrtc = () => {
             handleVideoCandidate(data);
             break;
           case 'audio-answer':
-            handleAudioAnswer(data);
+            handleAudioAnswer?.(data);
             break;
           case 'audio-candidate':
-            handleAudioCandidate(data);
+            handleAudioCandidate?.(data);
             break;
           case 'video-status':
             handleVideoStatus(Number(data));
@@ -280,7 +296,8 @@ export const H264Webrtc = () => {
       }
 
       video.close();
-      audio.close();
+      audio?.close();
+      audioConnectionRef.current = null;
 
       videoOfferSent.current = false;
       audioOfferSent.current = false;
@@ -297,23 +314,24 @@ export const H264Webrtc = () => {
       micSenderRef.current = null;
       micTrackRef.current = null;
     };
-  }, []);
+  }, [hdmiAudioLoaded, hdmiAudioEnabled, setVideoStatus, setVolume]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement) return;
 
-    if (volume > 0) {
+    if (volume > 0 && hdmiAudioEnabled) {
       if (audioElement.paused) {
         audioElement.play().catch(console.error);
       }
       if (audioElement.muted) {
         audioElement.muted = false;
       }
+      sendMsgRef.current('audio-start', '1');
     }
 
     audioElement.volume = volume / 100;
-  }, [volume]);
+  }, [volume, hdmiAudioEnabled]);
 
   // Handle microphone enable/disable
   useEffect(() => {
@@ -393,7 +411,15 @@ export const H264Webrtc = () => {
             autoPlay
             playsInline
             controls={false}
-            onPlaying={() => setIsLoading(false)}
+            onPlaying={() => {
+              setIsLoading(false);
+              setIsPlaying(true);
+            }}
+            onLoadedData={() => {
+              if (videoRef.current && videoRef.current.videoWidth > 0) {
+                setIsPlaying(true);
+              }
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();

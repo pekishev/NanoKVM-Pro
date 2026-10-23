@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { setVideoMode as setCookie } from '@/lib/localstorage.ts';
 import { videoModeAtom } from '@/jotai/screen.ts';
 
+import { KickClients } from './kick-clients.tsx';
 import { VideoModeH265 } from './video-mode-h265.tsx';
 
 const videoGroups = [
@@ -63,6 +64,9 @@ export const VideoMode = () => {
           {group.key !== 'mjpeg' && <Divider style={{ margin: '5px 0' }} />}
         </div>
       ))}
+
+      <Divider style={{ margin: '5px 0' }} />
+      <KickClients />
     </>
   );
 

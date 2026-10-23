@@ -8,6 +8,7 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import * as api from '@/api/vm.ts';
 import * as storage from '@/lib/localstorage.ts';
 import { menuDisabledItemsAtom } from '@/jotai/settings.ts';
+import { useHdmiAudio } from '@/hooks/use-hdmi-audio.ts';
 import { useMenuBounds } from '@/hooks/useMenuBounds.ts';
 import { useMenuVisibility } from '@/hooks/useMenuVisibility.ts';
 
@@ -31,6 +32,7 @@ export const Menu = () => {
 
   const menuDisabledItems = useAtomValue(menuDisabledItemsAtom);
   const setMenuDisabledItems = useSetAtom(menuDisabledItemsAtom);
+  const { enabled: hdmiAudioEnabled } = useHdmiAudio();
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -105,9 +107,10 @@ export const Menu = () => {
             <Divider type="vertical" />
 
             <Screen />
-            {isEnabled('volume') && <Volume />}
-            {isEnabled('microphone') && <Microphone />}
-            {['volume', 'microphone'].some(isEnabled) && <Divider type="vertical" />}
+            {isEnabled('volume') && hdmiAudioEnabled && <Volume />}
+            {isEnabled('microphone') && hdmiAudioEnabled && <Microphone />}
+            {hdmiAudioEnabled &&
+              ['volume', 'microphone'].some(isEnabled) && <Divider type="vertical" />}
 
             <Keyboard />
             <Mouse />

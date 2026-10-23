@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"NanoKVM-Server/config"
+	"NanoKVM-Server/service/stream"
 	"net/http"
 	"sync"
 	"time"
@@ -22,6 +23,12 @@ var (
 	globalManager *WebRTCManager
 	managerOnce   sync.Once
 )
+
+func init() {
+	stream.RegisterClientCloser(func() int {
+		return getManager().CloseAll()
+	})
+}
 
 func getManager() *WebRTCManager {
 	managerOnce.Do(func() {
@@ -65,16 +72,18 @@ func Connect(c *gin.Context) {
 		log.Debugf("h265 video peer disconnected: %s", c.ClientIP())
 	}()
 
-	// create audio connection
-	audioConn, err := createPeerConnection(iceServers, nil)
-	if err != nil {
-		log.Errorf("failed to create h265 audio peer connection: %s", err)
-		return
+	var audioConn *webrtc.PeerConnection
+	if stream.IsHdmiAudioEnabled() {
+		audioConn, err = createPeerConnection(iceServers, nil)
+		if err != nil {
+			log.Errorf("failed to create h265 audio peer connection: %s", err)
+			return
+		}
+		defer func() {
+			_ = audioConn.Close()
+			log.Debugf("h265 audio peer disconnected: %s", c.ClientIP())
+		}()
 	}
-	defer func() {
-		_ = audioConn.Close()
-		log.Debugf("h265 audio peer disconnected: %s", c.ClientIP())
-	}()
 
 	// create client
 	client := NewClient(wsConn, videoConn, audioConn)

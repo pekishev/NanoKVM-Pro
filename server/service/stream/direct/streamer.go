@@ -52,6 +52,14 @@ func (s *Streamer) removeClient(ws *websocket.Conn) {
 	log.Debugf("h264 websocket disconnected, remaining clients: %d", count)
 }
 
+func (s *Streamer) CloseAll() int {
+	clients := s.getClients()
+	for _, client := range clients {
+		_ = client.Close()
+	}
+	return len(clients)
+}
+
 func (s *Streamer) updateClientSnapshotLocked() int {
 	clients := make([]*websocket.Conn, 0, len(s.clients))
 	for client := range s.clients {

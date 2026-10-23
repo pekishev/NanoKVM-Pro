@@ -2,6 +2,22 @@ export function isWebrtcSupported() {
   return 'RTCPeerConnection' in window;
 }
 
+export function getIceServers(): RTCIceServer[] {
+  const host = window.location.hostname;
+  if (
+    host === 'localhost' ||
+    host === '::1' ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    return [];
+  }
+
+  return [{ urls: ['stun:stun.l.google.com:19302'] }];
+}
+
 export function isDecoderSupported() {
   return 'VideoDecoder' in window;
 }

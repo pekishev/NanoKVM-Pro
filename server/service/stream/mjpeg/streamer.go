@@ -1,6 +1,7 @@
 package mjpeg
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -16,19 +17,19 @@ import (
 
 type Streamer struct {
 	mutex   sync.RWMutex
-	clients map[*gin.Context]bool
+	clients map[*gin.Context]context.CancelFunc
 	running int32
 }
 
 func NewStreamer() *Streamer {
 	return &Streamer{
-		clients: make(map[*gin.Context]bool),
+		clients: make(map[*gin.Context]context.CancelFunc),
 	}
 }
 
-func (s *Streamer) AddClient(c *gin.Context) {
+func (s *Streamer) AddClient(c *gin.Context, cancel context.CancelFunc) {
 	s.mutex.Lock()
-	s.clients[c] = true
+	s.clients[c] = cancel
 	s.mutex.Unlock()
 
 	common.GetKvmVision().SetStreamType(common.STREAM_TYPE_MJPEG)
@@ -65,6 +66,24 @@ func (s *Streamer) getClientCount() int {
 	defer s.mutex.RUnlock()
 
 	return len(s.clients)
+}
+
+func (s *Streamer) CloseAll() int {
+	s.mutex.RLock()
+	cancels := make([]context.CancelFunc, 0, len(s.clients))
+	for _, cancel := range s.clients {
+		if cancel != nil {
+			cancels = append(cancels, cancel)
+		}
+	}
+	count := len(s.clients)
+	s.mutex.RUnlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+
+	return count
 }
 
 func (s *Streamer) run() {

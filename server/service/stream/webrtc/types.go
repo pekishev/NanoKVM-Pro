@@ -15,6 +15,7 @@ type WebRTCManager struct {
 	videoSending   int32
 	audioSending   int32
 	videoStatus    int32
+	needKeyframe   int32
 	mutex          sync.Mutex
 }
 

@@ -222,6 +222,14 @@ type SetHdmiPassthroughReq struct {
 	Enabled bool `form:"enabled" validate:"omitempty"`
 }
 
+type GetHdmiAudioRsp struct {
+	Enabled bool `json:"enabled"`
+}
+
+type SetHdmiAudioReq struct {
+	Enabled bool `json:"enabled" form:"enabled"`
+}
+
 type SetTimeZoneReq struct {
 	Timezone string `validate:"required"`
 }

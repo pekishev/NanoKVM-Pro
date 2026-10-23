@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"NanoKVM-Server/service/stream"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
@@ -17,6 +19,10 @@ var (
 		},
 	}
 )
+
+func init() {
+	stream.RegisterClientCloser(streamer.CloseAll)
+}
 
 func Connect(c *gin.Context) {
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)

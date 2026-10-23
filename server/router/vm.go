@@ -42,6 +42,8 @@ func vmRouter(r *gin.Engine) {
 	api.POST("/vm/hdmi/capture", service.SetHdmiCapture)         // set HDMI capture status
 	api.GET("/vm/hdmi/passthrough", service.GetHdmiPassthrough)  // get HDMI passthrough status
 	api.POST("/vm/hdmi/passthrough", service.SetHdmiPassthrough) // set HDMI passthrough status
+	api.GET("/vm/hdmi/audio", service.GetHdmiAudio)              // get HDMI audio status
+	api.POST("/vm/hdmi/audio", service.SetHdmiAudio)             // set HDMI audio status
 
 	api.GET("/vm/ssh", service.GetSSHState)         // get SSH state
 	api.POST("/vm/ssh/enable", service.EnableSSH)   // enable SSH

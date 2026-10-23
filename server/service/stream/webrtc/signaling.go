@@ -6,6 +6,8 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	log "github.com/sirupsen/logrus"
+
+	"NanoKVM-Server/service/stream"
 )
 
 func NewSignalingHandler(client *Client) *SignalingHandler {
@@ -33,23 +35,24 @@ func (s *SignalingHandler) RegisterCallbacks() {
 		}
 	})
 
-	// audio ICE candidate
-	s.client.audio.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if candidate == nil {
-			return
-		}
+	if s.client.audio != nil {
+		s.client.audio.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+			if candidate == nil {
+				return
+			}
 
-		candidateByte, err := json.Marshal(candidate.ToJSON())
-		if err != nil {
-			log.Errorf("failed to marshal audio candidate: %s", err)
-			return
-		}
+			candidateByte, err := json.Marshal(candidate.ToJSON())
+			if err != nil {
+				log.Errorf("failed to marshal audio candidate: %s", err)
+				return
+			}
 
-		if err := s.client.WriteMessage("audio-candidate", string(candidateByte)); err != nil {
-			log.Errorf("failed to send audio candidate or: %s", err)
-			return
-		}
-	})
+			if err := s.client.WriteMessage("audio-candidate", string(candidateByte)); err != nil {
+				log.Errorf("failed to send audio candidate or: %s", err)
+				return
+			}
+		})
+	}
 
 	manager := getManager()
 
@@ -62,22 +65,18 @@ func (s *SignalingHandler) RegisterCallbacks() {
 		log.Debugf("video connection state changed to %s", state.String())
 	})
 
-	// audio connection state change
-	s.client.audio.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		if state == webrtc.ICEConnectionStateConnected {
-			manager.StartAudioStream()
-		}
+	if s.client.audio != nil {
+		s.client.audio.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+			log.Debugf("audio connection state changed to %s", state.String())
+		})
 
-		log.Debugf("audio connection state changed to %s", state.String())
-	})
-
-	// handle incoming microphone audio track
-	s.client.audio.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		if track.Kind() == webrtc.RTPCodecTypeAudio {
-			log.Debugf("received audio track: %s", track.Codec().MimeType)
-			manager.StartMicStream(track)
-		}
-	})
+		s.client.audio.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+			if track.Kind() == webrtc.RTPCodecTypeAudio {
+				log.Debugf("received audio track: %s", track.Codec().MimeType)
+				manager.StartMicStream(track)
+			}
+		})
+	}
 }
 
 // HandleMessage handle the received message
@@ -93,6 +92,11 @@ func (s *SignalingHandler) HandleMessage(message *Message) error {
 		return s.handleAudioCandidate(message.Data)
 	case "heartbeat":
 		return s.handleHeartbeat()
+	case "audio-start":
+		if stream.IsHdmiAudioEnabled() {
+			getManager().StartAudioStream()
+		}
+		return nil
 	default:
 		log.Debugf("Unhandled message event: %s", message.Event)
 		return nil
@@ -168,6 +172,9 @@ func (s *SignalingHandler) updateHeaderExtensionID() error {
 
 // handle video offer
 func (s *SignalingHandler) handleAudioOffer(data string) error {
+	if s.client.audio == nil {
+		return nil
+	}
 	if s.client.audio.SignalingState() != webrtc.SignalingStateStable {
 		err := errors.New("audio signaling is not stable")
 		log.Error(err)
@@ -223,6 +230,9 @@ func (s *SignalingHandler) handleVideoCandidate(data string) error {
 
 // handl audio candidate
 func (s *SignalingHandler) handleAudioCandidate(data string) error {
+	if s.client.audio == nil {
+		return nil
+	}
 	candidate := webrtc.ICECandidateInit{}
 	if err := json.Unmarshal([]byte(data), &candidate); err != nil {
 		log.Errorf("failed to unmarshal candidate: %s", err)

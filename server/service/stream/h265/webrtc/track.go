@@ -53,6 +53,9 @@ func (t *Track) writeVideo(sample media.Sample) {
 }
 
 func (t *Track) writeAudio(sample media.Sample) {
+	if t.audio == nil {
+		return
+	}
 	err := t.audio.WriteSample(sample)
 	if err != nil {
 		log.Errorf("failed to send h265 audio: %s", err)

@@ -22,6 +22,7 @@ func streamRouter(r *gin.Engine) {
 	api.POST("/stream/quality", service.SetQuality)              // set stream quality / bit-rate
 	api.POST("/stream/gop", service.SetGop)                      // set stream gop
 	api.POST("/stream/fps", service.SetFps)                      // set stream fps
+	api.POST("/stream/kick", service.KickClients)                // disconnect other viewers
 
 	api.GET("/stream/mjpeg", mjpeg.Connect)             // mjpeg stream
 	api.GET("/stream/h264/direct", direct.Connect)      // h264 stream (direct)

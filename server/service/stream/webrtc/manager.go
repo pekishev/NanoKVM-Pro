@@ -40,6 +40,8 @@ func (m *WebRTCManager) AddClient(ws *websocket.Conn, client *Client) {
 	m.mutex.Unlock()
 
 	common.GetKvmVision().SetStreamType(common.STREAM_TYPE_H264_WEBRTC)
+	atomic.StoreInt32(&m.needKeyframe, 1)
+	m.StartVideoStream()
 
 	log.Debugf("added client %s, total clients: %d", ws.RemoteAddr(), count)
 }
@@ -51,6 +53,25 @@ func (m *WebRTCManager) RemoveClient(ws *websocket.Conn) {
 	m.mutex.Unlock()
 
 	log.Debugf("removed client %s, total clients: %d", ws.RemoteAddr(), count)
+}
+
+func (m *WebRTCManager) CloseAll() int {
+	clients := m.getClients()
+	for _, client := range clients {
+		if client == nil {
+			continue
+		}
+		if client.ws != nil {
+			_ = client.ws.Close()
+		}
+		if client.video != nil {
+			_ = client.video.Close()
+		}
+		if client.audio != nil {
+			_ = client.audio.Close()
+		}
+	}
+	return len(clients)
 }
 
 func (m *WebRTCManager) GetClientCount() int {
@@ -84,6 +105,9 @@ func (m *WebRTCManager) StartVideoStream() {
 }
 
 func (m *WebRTCManager) StartAudioStream() {
+	if !stream.IsHdmiAudioEnabled() {
+		return
+	}
 	if atomic.CompareAndSwapInt32(&m.audioSending, 0, 1) {
 		go m.sendAudioStream()
 	}
@@ -123,8 +147,20 @@ func (m *WebRTCManager) sendVideoStream() {
 			continue
 		}
 
+		if atomic.LoadInt32(&m.needKeyframe) == 1 {
+			_ = vision.SetGop(1)
+		}
+
 		data, result := vision.ReadH264(screen.Width, screen.Height, screen.BitRate)
 		m.updateStatus(result)
+
+		if result == int(common.IMG_H264_TYPE_IF) && atomic.CompareAndSwapInt32(&m.needKeyframe, 1, 0) {
+			gop := screen.GOP
+			if gop < 1 {
+				gop = 50
+			}
+			_ = vision.SetGop(gop)
+		}
 
 		if result < 0 || len(data) == 0 {
 			continue
@@ -172,7 +208,11 @@ func (m *WebRTCManager) sendAudioStream() {
 		}
 
 		data, result := vision.ReadAudio()
-		if result < 0 || len(data) == 0 {
+		if result < 0 {
+			log.Warn("HDMI audio unavailable, stopping capture so it does not stall the video encoder")
+			return
+		}
+		if len(data) == 0 {
 			continue
 		}
 

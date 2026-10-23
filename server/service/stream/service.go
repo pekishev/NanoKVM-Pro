@@ -68,6 +68,22 @@ func (s *Service) SetMode(c *gin.Context) {
 	log.Debugf("update video mode to %s", req.Mode)
 }
 
+func (s *Service) KickClients(c *gin.Context) {
+	var req proto.SetModeReq
+	var rsp proto.Response
+
+	if err := c.ShouldBind(&req); err == nil && req.Mode != "" {
+		if streamType, ok := common.StreamTypeMap[strings.ToLower(req.Mode)]; ok {
+			common.GetScreen().StreamType = streamType
+			common.GetKvmVision().SetStreamType(uint8(streamType))
+		}
+	}
+
+	closed := CloseAllClients()
+	rsp.OkRspWithData(c, map[string]int{"closed": closed})
+	log.Infof("kicked %d stream client(s)", closed)
+}
+
 func (s *Service) SetQuality(c *gin.Context) {
 	var req proto.SetQualityReq
 	var rsp proto.Response

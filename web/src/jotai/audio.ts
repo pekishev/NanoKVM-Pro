@@ -1,4 +1,7 @@
 import { atom } from 'jotai';
 
-// Microphone enabled state
 export const microphoneEnabledAtom = atom(false);
+
+export const hdmiAudioEnabledAtom = atom(false);
+
+export const hdmiAudioLoadedAtom = atom(false);

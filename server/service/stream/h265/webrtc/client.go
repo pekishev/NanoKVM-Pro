@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
@@ -10,7 +11,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	log "github.com/sirupsen/logrus"
 
-	"sync"
+	"NanoKVM-Server/service/stream"
 )
 
 func NewClient(ws *websocket.Conn, videoConn, audioConn *webrtc.PeerConnection) *Client {
@@ -89,29 +90,32 @@ func (c *Client) AddTrack() (*Track, error) {
 	}
 	go startRTCPReader(videoSender)
 
-	// audio track
-	audioTrack, err := webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio",
-		"pion-audio",
-	)
-	if err != nil {
-		log.Errorf("failed to create audio track: %s", err)
-		return nil, err
-	}
-
-	audioSender, err := c.audio.AddTrack(audioTrack)
-	if err != nil {
-		log.Errorf("failed to add audio track: %s", err)
-		return nil, err
-	}
-	go startRTCPReader(audioSender)
-
-	return &Track{
+	track := &Track{
 		videoPacketizer: videoPacketizer,
 		video:           videoTrack,
-		audio:           audioTrack,
-	}, nil
+	}
+
+	if c.audio != nil && stream.IsHdmiAudioEnabled() {
+		audioTrack, err := webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+			"audio",
+			"pion-audio",
+		)
+		if err != nil {
+			log.Errorf("failed to create audio track: %s", err)
+			return nil, err
+		}
+
+		audioSender, err := c.audio.AddTrack(audioTrack)
+		if err != nil {
+			log.Errorf("failed to add audio track: %s", err)
+			return nil, err
+		}
+		go startRTCPReader(audioSender)
+		track.audio = audioTrack
+	}
+
+	return track, nil
 }
 
 func startRTCPReader(sender *webrtc.RTPSender) {

@@ -457,11 +457,17 @@ const zh = {
         },
         network: '虚拟网卡',
         networkDesc: '在远程主机中挂载虚拟网卡',
+        hdmiAudio: 'HDMI 音频',
+        hdmiAudioDesc: '将 HDMI 声音传到浏览器。默认关闭，不会创建 WebRTC 音频连接。',
+        hdmiAudioTip:
+          '不需要声音时请保持关闭：不会启动采集，菜单中的音量和麦克风图标也会隐藏。\n' +
+          '这不会在远程主机上添加 USB 声卡；远程主机上的音频设备由下方的虚拟麦克风控制。',
         mic: '虚拟麦克风',
-        micDesc: '在远程主机中挂载虚拟麦克风',
+        micDesc: '在远程主机中挂载 USB 麦克风',
         micTip:
+          '正是这个开关会在目标电脑上出现音频设备。\n' +
           '受 USB 端点资源限制，启用虚拟麦克风将自动禁用 USB 副屏功能。\n' +
-          '在进行 BIOS 操作时建议关闭虚拟麦克风，以确保最佳兼容性。',
+          '在进行 BIOS 操作时建议关闭，以确保最佳兼容性。',
         datetime: {
           timezone: '时区',
           datetime: '时间',

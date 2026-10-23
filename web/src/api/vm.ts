@@ -105,6 +105,14 @@ export function setHdmiPassthrough(enabled: boolean) {
   return http.post('/api/vm/hdmi/passthrough', { enabled });
 }
 
+export function getHdmiAudio() {
+  return http.get('/api/vm/hdmi/audio');
+}
+
+export function setHdmiAudio(enabled: boolean) {
+  return http.post('/api/vm/hdmi/audio', { enabled });
+}
+
 // get SSH state
 export function getSSHState() {
   return http.get('/api/vm/ssh');

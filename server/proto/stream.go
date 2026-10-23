@@ -5,7 +5,7 @@ type SetRateControlModeReq struct {
 }
 
 type SetModeReq struct {
-	Mode string `form:"mode" validate:"required"`
+	Mode string `json:"mode" form:"mode" validate:"required"`
 }
 
 type SetQualityReq struct {

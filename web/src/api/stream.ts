@@ -15,6 +15,10 @@ export function setMode(mode: string) {
   return http.post('/api/stream/mode', data);
 }
 
+export function kickClients(mode?: string) {
+  return http.post('/api/stream/kick', mode ? { mode } : {});
+}
+
 // set stream FPS
 export function setFps(fps: number) {
   const data = { fps };

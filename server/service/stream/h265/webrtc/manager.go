@@ -38,6 +38,7 @@ func (m *WebRTCManager) AddTrack(ws *websocket.Conn, track *Track) {
 	m.mutex.Unlock()
 
 	common.GetKvmVision().SetStreamType(common.STREAM_TYPE_H265_WEBRTC)
+	m.StartVideoStream()
 
 	log.Debugf("added track %s, total tracks: %d", ws.RemoteAddr(), count)
 }
@@ -49,6 +50,20 @@ func (m *WebRTCManager) RemoveTrack(ws *websocket.Conn) {
 	m.mutex.Unlock()
 
 	log.Debugf("removed track %s, total tracks: %d", ws.RemoteAddr(), count)
+}
+
+func (m *WebRTCManager) CloseAll() int {
+	m.mutex.Lock()
+	conns := make([]*websocket.Conn, 0, len(m.tracks))
+	for ws := range m.tracks {
+		conns = append(conns, ws)
+	}
+	m.mutex.Unlock()
+
+	for _, ws := range conns {
+		_ = ws.Close()
+	}
+	return len(conns)
 }
 
 func (m *WebRTCManager) GetTrackCount() int {
@@ -82,6 +97,9 @@ func (m *WebRTCManager) StartVideoStream() {
 }
 
 func (m *WebRTCManager) StartAudioStream() {
+	if !stream.IsHdmiAudioEnabled() {
+		return
+	}
 	if atomic.CompareAndSwapInt32(&m.audioSending, 0, 1) {
 		go m.sendAudioStream()
 	}
@@ -166,7 +184,11 @@ func (m *WebRTCManager) sendAudioStream() {
 		}
 
 		data, result := vision.ReadAudio()
-		if result < 0 || len(data) == 0 {
+		if result < 0 {
+			log.Warn("HDMI audio unavailable, stopping capture so it does not stall the video encoder")
+			return
+		}
+		if len(data) == 0 {
 			continue
 		}
 

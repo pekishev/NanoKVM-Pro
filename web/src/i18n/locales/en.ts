@@ -95,6 +95,8 @@ const en = {
       scale: 'Scale',
       rotation: 'Rotation',
       resetHdmi: 'Reset HDMI',
+      kickClients: 'Disconnect other viewers',
+      kickClientsConfirm: 'Close the stream on other tabs and devices? This page will reconnect.',
       noSignal: 'HDMI no signal',
       inconsistentVideoMode: 'Play paused. Another video mode is playing.',
       upload: 'Upload',
@@ -497,11 +499,18 @@ const en = {
         },
         network: 'Virtual Network',
         networkDesc: 'Mount virtual network card on the remote host',
+        hdmiAudio: 'HDMI Audio',
+        hdmiAudioDesc:
+          'Send HDMI sound to the browser. Off by default — no WebRTC audio session is created.',
+        hdmiAudioTip:
+          'Leave this off if you do not need sound: capture stays idle, and the volume/mic menu icons stay hidden.\n' +
+          'This does not add a USB sound card on the remote host — that is Virtual Mic below.',
         mic: 'Virtual Mic',
-        micDesc: 'Mount virtual microphone on the remote host',
+        micDesc: 'Mount a USB microphone on the remote host',
         micTip:
-          'Due to USB endpoint limitations, enabling the Virtual Mic will disable the USB Secondary Screen.\n' +
-          'And it is recommended to disable this feature during BIOS operations to ensure optimal compatibility.',
+          'This is the switch that makes an audio device appear on the target PC.\n' +
+          'Due to USB endpoint limitations, enabling Virtual Mic disables the USB Secondary Screen.\n' +
+          'Disable it during BIOS work for best compatibility.',
         reboot: 'Reboot',
         rebootDesc: 'Are you sure you want to reboot NanoKVM?',
         datetime: {

@@ -6,6 +6,7 @@ import { getMountedImage } from '@/api/storage.ts';
 import * as api from '@/api/virtual-device.ts';
 
 import { Disk } from './disk.tsx';
+import { HdmiAudio } from './hdmi-audio.tsx';
 import { Microphone } from './microphone.tsx';
 import { Network } from './network.tsx';
 
@@ -83,6 +84,8 @@ export const VirtualDevices = () => {
         isNetworkEnabled={isNetworkEnabled}
         getVirtualDevices={getVirtualDevices}
       />
+
+      <HdmiAudio />
 
       <Microphone
         isDisabled={isHidOnlyMode || isImageMounted}
