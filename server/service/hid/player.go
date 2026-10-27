@@ -35,11 +35,11 @@ var (
 		GetHid().WriteHid2(data)
 		return nil
 	}
-	sleepFn      = sleepCtx
-	nowFn        = time.Now
-	grabFrameFn  = grabHDMIFrame
-	loadImageFn  = loadMacroImageRef
-	frameSizeFn  = hdmiFrameSize
+	sleepFn     = sleepCtx
+	nowFn       = time.Now
+	grabFrameFn = grabHDMIFrame
+	loadImageFn = loadMacroImageRef
+	frameSizeFn = hdmiFrameSize
 )
 
 func playMacro(ctx context.Context, macro proto.Macro, macros []proto.Macro) error {
@@ -151,6 +151,23 @@ func waitForImage(ctx context.Context, macro proto.Macro, name string, timeoutMs
 		return fmt.Errorf("%s: image not found: %s", macro.Name, name)
 	}
 
+	err = waitForLoadedImage(ctx, ref, timeoutMs)
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, errMacroStopped):
+		return err
+	case errors.Is(err, ErrWaitImageNoFrame):
+		return fmt.Errorf("%s: HDMI frame unavailable", macro.Name)
+	case errors.Is(err, ErrWaitImageTimeout):
+		return fmt.Errorf("%s: WAITIMAGE %s timed out", macro.Name, name)
+	default:
+		return fmt.Errorf("%s: %w", macro.Name, err)
+	}
+}
+
+func waitForLoadedImage(ctx context.Context, ref *loadedMacroImage, timeoutMs int) error {
 	deadline := nowFn().Add(time.Duration(timeoutMs) * time.Millisecond)
 	sawFrame := false
 	streak := 0
@@ -178,9 +195,9 @@ func waitForImage(ctx context.Context, macro proto.Macro, name string, timeoutMs
 		now := nowFn()
 		if !now.Before(deadline) {
 			if !sawFrame {
-				return fmt.Errorf("%s: HDMI frame unavailable", macro.Name)
+				return ErrWaitImageNoFrame
 			}
-			return fmt.Errorf("%s: WAITIMAGE %s timed out", macro.Name, name)
+			return ErrWaitImageTimeout
 		}
 		wait := imagePollMS
 		if remaining := deadline.Sub(now); remaining < wait {

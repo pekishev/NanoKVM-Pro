@@ -11,6 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"NanoKVM-Server/proto"
+	"NanoKVM-Server/service/hid"
 	"NanoKVM-Server/service/mcp/hotkeys"
 	"NanoKVM-Server/service/mcp/layout"
 )
@@ -87,6 +89,26 @@ func toolSpecs() []toolSpec {
 				},
 			},
 		},
+		{
+			Name:        "wait_image",
+			Description: "Wait until an HDMI fragment appears. Either a saved WAITIMAGE (name, optional id or macro) or an inline PNG/JPEG (png plus x, y, width, height in full-frame pixels). Fragment at most 320×320. timeout_ms 0..300000, default 20000. Same matching as WAITIMAGE in HID macros.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name":         map[string]any{"type": "string"},
+					"id":           map[string]any{"type": "string"},
+					"macro":        map[string]any{"type": "string"},
+					"png":          map[string]any{"type": "string"},
+					"x":            pixels,
+					"y":            pixels,
+					"width":        pixels,
+					"height":       pixels,
+					"frame_width":  pixels,
+					"frame_height": pixels,
+					"timeout_ms":   map[string]any{"type": "integer"},
+				},
+			},
+		},
 	}
 }
 
@@ -120,6 +142,8 @@ func callToolCtx(ctx context.Context, params json.RawMessage) toolResult {
 		return toolStopType()
 	case "press":
 		return toolPress(args)
+	case "wait_image":
+		return toolWaitImage(ctx, args)
 	default:
 		return errorResult("unknown tool: " + call.Name)
 	}
@@ -316,6 +340,117 @@ func toolPress(args map[string]any) toolResult {
 		label = fmt.Sprintf("%s ×%d", label, repeat)
 	}
 	return textResult(map[string]any{"ok": true, "keys": label, "repeat": repeat})
+}
+
+func toolWaitImage(ctx context.Context, args map[string]any) toolResult {
+	req := proto.WaitImageReq{
+		ID:    stringArg(args, "id"),
+		Macro: stringArg(args, "macro"),
+		Name:  stringArg(args, "name"),
+		Png:   stringArg(args, "png"),
+	}
+	x, hasX, err := optionalInt(args, "x")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	y, hasY, err := optionalInt(args, "y")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	w, hasW, err := optionalInt(args, "width")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	h, hasH, err := optionalInt(args, "height")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	fw, _, err := optionalInt(args, "frame_width")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	if fw == 0 {
+		fw, _, err = optionalInt(args, "frameW")
+		if err != nil {
+			return errorResult(err.Error())
+		}
+	}
+	fh, _, err := optionalInt(args, "frame_height")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	if fh == 0 {
+		fh, _, err = optionalInt(args, "frameH")
+		if err != nil {
+			return errorResult(err.Error())
+		}
+	}
+	ms, hasMS, err := optionalInt(args, "timeout_ms")
+	if err != nil {
+		return errorResult(err.Error())
+	}
+	if !hasMS {
+		ms, hasMS, err = optionalInt(args, "ms")
+		if err != nil {
+			return errorResult(err.Error())
+		}
+	}
+
+	req.X, req.Y, req.W, req.H = x, y, w, h
+	req.FrameW, req.FrameH = fw, fh
+	if hasMS {
+		req.Ms = &ms
+	}
+	if req.Png != "" && (!hasX || !hasY || !hasW || !hasH) {
+		return errorResult("wait_image png needs x, y, width and height in full-frame pixels")
+	}
+
+	spec, err := hid.WaitImageSpecFromReq(req)
+	if err != nil {
+		return errorResult("wait_image needs a saved name or png with x, y, width, height")
+	}
+
+	var name string
+	err = withHID(func() error {
+		var playErr error
+		name, playErr = hid.PlayWaitImage(ctx, spec)
+		return playErr
+	})
+	if err != nil {
+		if errors.Is(err, hid.ErrBusy) {
+			return errorResult("keyboard is busy")
+		}
+		if errors.Is(err, hid.ErrWaitImageTimeout) {
+			label := spec.Name
+			if label == "" {
+				label = name
+			}
+			if label != "" {
+				return errorResult("WAITIMAGE " + label + " timed out")
+			}
+			return errorResult(err.Error())
+		}
+		if errors.Is(err, hid.ErrWaitImageNotFound) {
+			return errorResult("image not found")
+		}
+		if errors.Is(err, hid.ErrWaitImageNoFrame) {
+			return errorResult("HDMI frame unavailable")
+		}
+		if errors.Is(err, hid.ErrStopped) || errors.Is(err, context.Canceled) {
+			return textResult(map[string]any{"ok": false, "stopped": true})
+		}
+		state.setError(err.Error())
+		return errorResult(err.Error())
+	}
+	return textResult(map[string]any{"ok": true, "matched": true, "name": name})
+}
+
+func stringArg(args map[string]any, key string) string {
+	raw, ok := args[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
 func optionalInt(args map[string]any, key string) (int, bool, error) {

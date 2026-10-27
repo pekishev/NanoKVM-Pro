@@ -27,7 +27,7 @@ func TestInitializeAndToolList(t *testing.T) {
 		Method:  "tools/list",
 	})
 	body, _ := json.Marshal(listed.Result)
-	for _, name := range []string{"status", "screenshot", "click", "type_keys", "type_text", "stop_type", "press"} {
+	for _, name := range []string{"status", "screenshot", "click", "type_keys", "type_text", "stop_type", "press", "wait_image"} {
 		if !strings.Contains(string(body), `"name":"`+name+`"`) {
 			t.Fatalf("missing tool %s in %s", name, body)
 		}
@@ -76,6 +76,13 @@ func TestStopTypeWhenIdle(t *testing.T) {
 	}
 	if payload["ok"] != true || payload["stopped"] != false {
 		t.Fatalf("%v", payload)
+	}
+}
+
+func TestWaitImageNeedsArgs(t *testing.T) {
+	result := callTool(json.RawMessage(`{"name":"wait_image","arguments":{}}`))
+	if !result.IsError {
+		t.Fatal("expected wait_image arguments error")
 	}
 }
 

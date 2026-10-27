@@ -77,6 +77,25 @@ type StopMacroRsp struct {
 	Stopped bool `json:"stopped"`
 }
 
+type WaitImageReq struct {
+	ID     string `json:"id" form:"id"`
+	Macro  string `json:"macro" form:"macro"`
+	Name   string `json:"name" form:"name"`
+	Ms     *int   `json:"ms" form:"ms"`
+	X      int    `json:"x" form:"x"`
+	Y      int    `json:"y" form:"y"`
+	W      int    `json:"w" form:"w"`
+	H      int    `json:"h" form:"h"`
+	FrameW int    `json:"frameW" form:"frameW"`
+	FrameH int    `json:"frameH" form:"frameH"`
+	Png    string `json:"png" form:"png"`
+}
+
+type WaitImageRsp struct {
+	Matched bool   `json:"matched"`
+	Name    string `json:"name,omitempty"`
+}
+
 type MacroImageRsp struct {
 	Name   string  `json:"name"`
 	X      float64 `json:"x"`

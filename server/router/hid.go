@@ -24,6 +24,7 @@ func hidRouter(r *gin.Engine) {
 	api.GET("/hid/macro/image", service.GetMacroImage)
 	api.POST("/hid/macro/run", service.RunMacro)   // run a saved macro on the device
 	api.POST("/hid/macro/stop", service.StopMacro) // cancel a running API macro
+	api.POST("/hid/waitimage", service.WaitImage)  // wait until an HDMI fragment appears
 
 	api.GET("/hid/mode", service.GetHidMode)  // get hid mode
 	api.POST("/hid/mode", service.SetHidMode) // set hid mode

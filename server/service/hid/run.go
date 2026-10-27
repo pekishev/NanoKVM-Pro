@@ -90,6 +90,10 @@ func runSavedMacro(parent context.Context, id, name string) (proto.Macro, error)
 	return macro, nil
 }
 
+func StopPlayback() bool {
+	return stopRunningMacro()
+}
+
 func stopRunningMacro() bool {
 	playMu.Lock()
 	cancel := playCancel

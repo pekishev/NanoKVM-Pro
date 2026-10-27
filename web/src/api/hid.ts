@@ -86,3 +86,19 @@ export function runMacro(payload: { id?: string; name?: string }) {
 export function stopMacro() {
   return http.post('/api/hid/macro/stop');
 }
+
+export function waitImage(payload: {
+  id?: string;
+  macro?: string;
+  name?: string;
+  ms?: number;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  frameW?: number;
+  frameH?: number;
+  png?: string;
+}) {
+  return http.post('/api/hid/waitimage', payload, { timeout: 6 * 60 * 1000 });
+}

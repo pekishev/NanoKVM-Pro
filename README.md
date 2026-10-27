@@ -12,7 +12,7 @@ This firmware includes a built-in **NanoKVM MCP** server: agents (Cursor, Claude
 В этой прошивке есть **NanoKVM MCP**: агент видит HDMI и управляет удалённым ПК через HID.
 
 - Endpoint: `https://<device>/mcp` (same login as the web UI)
-- Tools: `status`, `screenshot`, `click`, `type_keys`, `type_text`, `stop_type`, `press`
+- Tools: `status`, `screenshot`, `click`, `type_keys`, `type_text`, `stop_type`, `press`, `wait_image`
 - Coordinates: integer pixels of the full HDMI frame, origin top-left
 - Mixed English/Russian typing sends Alt+Shift itself
 
@@ -47,6 +47,7 @@ BadUSB-style scripts instead of the old Leader Key:
 - `RUN OtherMacro` (one nesting level)
 - `WAITIMAGE name timeout` — wait until a saved HDMI fragment appears
 - Run a saved macro from a script: `POST /api/hid/macro/run` (Basic auth or JWT)
+- Wait for a fragment from a script: `POST /api/hid/waitimage` (saved `name` / `id` / `macro`, or inline `png` + `x` `y` `w` `h`; `ms` default 20000)
 - Stop from the web UI (Stop / Escape) or `POST /api/hid/macro/stop`
 - Playback runs on the device, not in the browser tab
 

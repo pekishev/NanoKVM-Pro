@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"NanoKVM-Server/service/hid"
 )
 
 const (
@@ -76,6 +78,7 @@ func handleRPCCtx(ctx context.Context, req rpcRequest) *rpcResponse {
 		return nil
 	case "notifications/cancelled":
 		state.requestStop()
+		hid.StopPlayback()
 		return nil
 	case "ping":
 		return rpcOK(req.ID, map[string]any{})
@@ -109,7 +112,7 @@ func initializeResult(params json.RawMessage) map[string]any {
 			"name":    serverName,
 			"version": "1.0.0",
 		},
-		"instructions": "Drive the remote PC through this NanoKVM: HDMI screenshots and HID keyboard/mouse. click and screenshot crop use integer pixels of the full HDMI frame, origin (0,0) top-left. Never pass fractions 0..1. Call status for frame_width x frame_height and layout (en/ru) before typing. Mixed EN/RU text sends Alt+Shift itself.",
+		"instructions": "Drive the remote PC through this NanoKVM: HDMI screenshots and HID keyboard/mouse. click, screenshot crop, and wait_image use integer pixels of the full HDMI frame, origin (0,0) top-left. Never pass fractions 0..1. Call status for frame_width x frame_height and layout (en/ru) before typing. Mixed EN/RU text sends Alt+Shift itself. wait_image waits until a saved or inline HDMI fragment appears.",
 	}
 }
 
