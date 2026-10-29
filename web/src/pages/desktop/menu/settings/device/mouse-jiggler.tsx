@@ -1,26 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Select, Switch } from 'antd';
+import { Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/vm.ts';
-import { setMouseJiggler } from '@/api/vm.ts';
 
 export const MouseJiggler = () => {
   const { t } = useTranslation();
 
   const [enabled, setEnabled] = useState(false);
-  const [mode, setMode] = useState('relative');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     getMouseJiggler();
   }, []);
-
-  const options = [
-    { value: 'disable', label: t('settings.device.mouseJiggler.disable') },
-    { value: 'relative', label: t('settings.device.mouseJiggler.relative') },
-    { value: 'absolute', label: t('settings.device.mouseJiggler.absolute') }
-  ];
 
   function getMouseJiggler() {
     setIsLoading(true);
@@ -34,48 +26,25 @@ export const MouseJiggler = () => {
         }
 
         setEnabled(rsp.data.enabled);
-        setMode(rsp.data.mode);
       })
       .finally(() => {
         setIsLoading(false);
       });
   }
 
-  function enable() {
+  function update(checked: boolean) {
     if (isLoading) return;
     setIsLoading(true);
 
     api
-      .setMouseJiggler(true, mode)
+      .setMouseJiggler(checked)
       .then((rsp) => {
         if (rsp.code !== 0) {
           console.log(rsp.msg);
           return;
         }
 
-        setEnabled(true);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }
-
-  function updateMode(value: string) {
-    if (isLoading) return;
-    setIsLoading(true);
-
-    const _enabled = value !== 'disable';
-    const _mode = value === 'disable' ? 'relative' : value;
-
-    setMouseJiggler(_enabled, _mode)
-      .then((rsp) => {
-        if (rsp.code !== 0) {
-          console.log(rsp.msg);
-          return;
-        }
-
-        setEnabled(_enabled);
-        setMode(_mode);
+        setEnabled(checked);
       })
       .finally(() => {
         setIsLoading(false);
@@ -91,17 +60,7 @@ export const MouseJiggler = () => {
         </span>
       </div>
 
-      {enabled ? (
-        <Select
-          style={{ width: 150 }}
-          value={mode}
-          options={options}
-          loading={isLoading}
-          onChange={updateMode}
-        />
-      ) : (
-        <Switch checked={enabled} loading={isLoading} onChange={enable} />
-      )}
+      <Switch checked={enabled} loading={isLoading} onChange={update} />
     </div>
   );
 };

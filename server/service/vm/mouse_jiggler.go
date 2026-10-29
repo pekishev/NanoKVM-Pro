@@ -34,7 +34,7 @@ func (s *Service) SetMouseJiggler(c *gin.Context) {
 	mouseJiggler := jiggler.GetJiggler()
 
 	if req.Enabled {
-		err = mouseJiggler.Enable(req.Mode)
+		err = mouseJiggler.Enable()
 	} else {
 		err = mouseJiggler.Disable()
 	}

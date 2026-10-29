@@ -134,8 +134,8 @@ export function getMouseJiggler() {
 }
 
 // set mouse jiggler
-export function setMouseJiggler(enabled: boolean, mode: string) {
-  return http.post('/api/vm/mouse-jiggler', { enabled, mode });
+export function setMouseJiggler(enabled: boolean) {
+  return http.post('/api/vm/mouse-jiggler', { enabled, mode: 'relative' });
 }
 
 // get Hostname
