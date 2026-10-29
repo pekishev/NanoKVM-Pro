@@ -73,21 +73,28 @@ export const Absolute = () => {
     const screenElement = getScreenElement();
     if (!screenElement) return;
     const screen = screenElement;
+    const gestureSurface = screen.parentElement ?? screen;
+    // Absolute Simple routes pointer/touch through the wrapper: Chrome on Fold
+    // treats the hardware-decoded <video> as its own pan/zoom surface after pinch.
+    const pointerTarget = isSimple ? gestureSurface : screen;
+    const simpleTouchOpts: AddEventListenerOptions = { passive: false, capture: true };
 
-    screen.addEventListener('mousedown', handleMouseDown);
-    screen.addEventListener('mouseup', handleMouseUp);
-    screen.addEventListener('mousemove', handleMouseMove);
-    screen.addEventListener('wheel', handleWheel);
-    screen.addEventListener('click', disableEvent);
-    screen.addEventListener('contextmenu', disableEvent);
+    pointerTarget.addEventListener('mousedown', handleMouseDown);
+    pointerTarget.addEventListener('mouseup', handleMouseUp);
+    pointerTarget.addEventListener('mousemove', handleMouseMove);
+    pointerTarget.addEventListener('wheel', handleWheel);
+    pointerTarget.addEventListener('click', disableEvent);
+    pointerTarget.addEventListener('contextmenu', disableEvent);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('mouseup', handleWindowMouseUp);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const unregisterMouseReleaseHandler = registerMouseReleaseHandler(releaseMouse);
 
-    const gestureSurface = screen.parentElement ?? screen;
     const previousOverflow = document.documentElement.style.overflow;
+    const previousScreenTouchAction = screen.style.touchAction;
+    const previousScreenPointerEvents = screen.style.pointerEvents;
+    const previousScreenTouchCallout = screen.style.getPropertyValue('-webkit-touch-callout');
     const view = { scale: 1, x: 0, y: 0 };
     const twoFinger = {
       mode: 'pending' as 'pending' | 'pinch' | 'scroll',
@@ -115,11 +122,16 @@ export const Absolute = () => {
     let skipTap = false;
 
     if (isSimple) {
-      gestureSurface.addEventListener('touchstart', handleSimpleTouchStart, { passive: false });
-      gestureSurface.addEventListener('touchmove', handleSimpleTouchMove, { passive: false });
-      gestureSurface.addEventListener('touchend', handleSimpleTouchEnd, { passive: false });
-      gestureSurface.addEventListener('touchcancel', handleSimpleTouchCancel, { passive: false });
+      gestureSurface.addEventListener('touchstart', handleSimpleTouchStart, simpleTouchOpts);
+      gestureSurface.addEventListener('touchmove', handleSimpleTouchMove, simpleTouchOpts);
+      gestureSurface.addEventListener('touchend', handleSimpleTouchEnd, simpleTouchOpts);
+      gestureSurface.addEventListener('touchcancel', handleSimpleTouchCancel, simpleTouchOpts);
       gestureSurface.style.touchAction = 'none';
+      screen.style.touchAction = 'none';
+      screen.style.setProperty('-webkit-touch-callout', 'none');
+      if (screen !== gestureSurface) {
+        screen.style.pointerEvents = 'none';
+      }
       document.documentElement.style.overflow = 'hidden';
     } else if (isBigScreen) {
       screen.addEventListener('touchstart', handleTouchStart);
@@ -240,8 +252,9 @@ export const Absolute = () => {
     }
 
     function isOverScreen(clientX: number, clientY: number) {
-      const el = document.elementFromPoint(clientX, clientY);
-      return !!el && (el === screen || screen.contains(el));
+      // After CSS zoom, elementFromPoint can miss the transformed video layer.
+      const rect = screen.getBoundingClientRect();
+      return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
     }
 
     function beginTwoFinger(touches: TouchList) {
@@ -425,8 +438,12 @@ export const Absolute = () => {
         return;
       }
 
-      // Block Chrome/Android image menus so the remote click owns the gesture.
-      e.preventDefault();
+      // At 1x, block Chrome/Android image menus so a tap stays a remote click.
+      // After pinch, preventDefault on start over the video is what Fold Chrome
+      // uses to drop the following 1-finger touchmove; pan is owned on move.
+      if (view.scale <= MIN_SCALE) {
+        e.preventDefault();
+      }
 
       longPressTimerRef.current = setTimeout(() => {
         isLongPressRef.current = true;
@@ -488,6 +505,11 @@ export const Absolute = () => {
       const touch = e.touches[0];
       lastAimClient.clientX = touch.clientX;
       lastAimClient.clientY = touch.clientY;
+
+      if (view.scale > MIN_SCALE) {
+        e.preventDefault();
+      }
+
       const deltaX = touch.clientX - touchStartPosRef.current.x;
       const deltaY = touch.clientY - touchStartPosRef.current.y;
       if (Math.hypot(deltaX, deltaY) <= TAP_THRESHOLD) {
@@ -501,7 +523,6 @@ export const Absolute = () => {
         return;
       }
 
-      e.preventDefault();
       if (!pan.active) {
         pan.active = true;
         pan.startX = touch.clientX;
@@ -923,23 +944,30 @@ export const Absolute = () => {
       releaseMouse();
       unregisterMouseReleaseHandler();
 
-      screen.removeEventListener('mousemove', handleMouseMove);
-      screen.removeEventListener('mousedown', handleMouseDown);
-      screen.removeEventListener('mouseup', handleMouseUp);
-      screen.removeEventListener('wheel', handleWheel);
-      screen.removeEventListener('click', disableEvent);
-      screen.removeEventListener('contextmenu', disableEvent);
+      pointerTarget.removeEventListener('mousemove', handleMouseMove);
+      pointerTarget.removeEventListener('mousedown', handleMouseDown);
+      pointerTarget.removeEventListener('mouseup', handleMouseUp);
+      pointerTarget.removeEventListener('wheel', handleWheel);
+      pointerTarget.removeEventListener('click', disableEvent);
+      pointerTarget.removeEventListener('contextmenu', disableEvent);
       screen.removeEventListener('touchstart', handleTouchStart);
       screen.removeEventListener('touchmove', handleTouchMove);
       screen.removeEventListener('touchend', handleTouchEnd);
       screen.removeEventListener('touchcancel', handleTouchCancel);
-      gestureSurface.removeEventListener('touchstart', handleSimpleTouchStart);
-      gestureSurface.removeEventListener('touchmove', handleSimpleTouchMove);
-      gestureSurface.removeEventListener('touchend', handleSimpleTouchEnd);
-      gestureSurface.removeEventListener('touchcancel', handleSimpleTouchCancel);
+      gestureSurface.removeEventListener('touchstart', handleSimpleTouchStart, simpleTouchOpts);
+      gestureSurface.removeEventListener('touchmove', handleSimpleTouchMove, simpleTouchOpts);
+      gestureSurface.removeEventListener('touchend', handleSimpleTouchEnd, simpleTouchOpts);
+      gestureSurface.removeEventListener('touchcancel', handleSimpleTouchCancel, simpleTouchOpts);
       gestureSurface.style.transform = '';
       gestureSurface.style.transformOrigin = '';
       gestureSurface.style.touchAction = '';
+      screen.style.touchAction = previousScreenTouchAction;
+      screen.style.pointerEvents = previousScreenPointerEvents;
+      if (previousScreenTouchCallout) {
+        screen.style.setProperty('-webkit-touch-callout', previousScreenTouchCallout);
+      } else {
+        screen.style.removeProperty('-webkit-touch-callout');
+      }
       document.documentElement.style.overflow = previousOverflow;
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('mouseup', handleWindowMouseUp);
