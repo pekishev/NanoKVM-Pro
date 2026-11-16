@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { notification } from 'antd';
 import type { TFunction } from 'i18next';
-import { getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
+import { getDefaultStore, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/hid.ts';
@@ -18,19 +18,18 @@ type MacroItemProps = {
 export const MacroItem = ({ macro }: MacroItemProps) => {
   const { t } = useTranslation();
   const isPlaying = useAtomValue(isMacroPlayingAtom);
-  const setPlaying = useSetAtom(isMacroPlayingAtom);
-  const setKeyboardEnable = useSetAtom(isKeyboardEnableAtom);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleClick() {
     if (isLoading || isPlaying || !macro.id || !macro.script.trim()) return;
 
     const store = getDefaultStore();
-    const previousKeyboard = store.get(isKeyboardEnableAtom);
+    if (store.get(isMacroPlayingAtom)) return;
 
+    const previousKeyboard = store.get(isKeyboardEnableAtom);
+    store.set(isKeyboardEnableAtom, false);
+    store.set(isMacroPlayingAtom, true);
     setIsLoading(true);
-    setKeyboardEnable(false);
-    setPlaying(true);
 
     try {
       const rsp = await api.runMacro({ id: macro.id });
@@ -45,8 +44,8 @@ export const MacroItem = ({ macro }: MacroItemProps) => {
     } catch (err) {
       console.log(err);
     } finally {
-      setPlaying(false);
-      setKeyboardEnable(previousKeyboard);
+      store.set(isMacroPlayingAtom, false);
+      store.set(isKeyboardEnableAtom, previousKeyboard);
       setIsLoading(false);
     }
   }
