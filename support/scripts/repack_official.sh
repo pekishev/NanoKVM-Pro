@@ -145,7 +145,17 @@ for app in "${apps[@]}"; do
         install -D -m 0755 "${asr_dir}/install.sh" "${tree}/kvmapp/asr/install.sh"
         install -D -m 0644 "${asr_dir}/nanokvm-asr.service" "${tree}/etc/systemd/system/nanokvm-asr.service"
         for script in postinst prerm; do
-            insert_after_header "${tree}/DEBIAN/${script}" "${asr_dir}/${script}"
+            maintainer="${tree}/DEBIAN/${script}"
+            if [[ -f "$maintainer" ]]; then
+                insert_after_header "$maintainer" "${asr_dir}/${script}"
+            else
+                {
+                    echo '#!/bin/sh'
+                    echo 'set -e'
+                    cat "${asr_dir}/${script}"
+                } >"$maintainer"
+                chmod 0755 "$maintainer"
+            fi
         done
     fi
 
