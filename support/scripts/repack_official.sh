@@ -8,8 +8,8 @@
 # The nanokvm DEB also carries the speech recognition service from support/asr.
 #
 # Usage:
-#   repack_official.sh --version 1.2.16-fork.1 --server NanoKVM-Server --web web/dist \
-#     [--out dist] [--base-archive nanokvm_pro_1.2.15.tar.gz]
+#   repack_official.sh --version 1.2.16-fork.2 --server NanoKVM-Server --web web/dist \
+#     [--out dist] [--base-archive nanokvm_pro_1.2.16.tar.gz]
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -49,6 +49,7 @@ done
 
 base_version=$(python3 "${script_dir}/getconfig.py" "$config" official base_version)
 base_url=$(python3 "${script_dir}/getconfig.py" "$config" official url)
+github_release=$(python3 "${script_dir}/getconfig.py" "$config" official github_release)
 [[ -n "$base_version" && -n "$base_url" ]] || die "[official] base_version and url must be set in config.ini"
 
 sha512_b64() {
@@ -64,8 +65,16 @@ trap 'rm -rf "$work"' EXIT
 
 if [[ -z "$base_archive" ]]; then
     base_archive="${work}/nanokvm_pro_${base_version}.tar.gz"
-    echo "Downloading ${base_url}/nanokvm_pro_${base_version}.tar.gz"
-    curl -fsSL --retry 3 -o "$base_archive" "${base_url}/nanokvm_pro_${base_version}.tar.gz"
+    cdn_archive="${base_url}/nanokvm_pro_${base_version}.tar.gz"
+    echo "Downloading ${cdn_archive}"
+    if ! curl -fsSL --retry 3 -o "$base_archive" "$cdn_archive"; then
+        [[ -n "$github_release" ]] || die "CDN archive missing and [official] github_release is not set"
+        github_archive="${github_release%/}/${base_version}/nanokvm_pro_${base_version}.tar.gz"
+        echo "CDN miss; downloading ${github_archive}"
+        curl -fsSL --retry 3 -o "$base_archive" "$github_archive" ||
+            die "failed to download official ${base_version} archive"
+    fi
+    [[ -s "$base_archive" ]] || die "official ${base_version} archive is empty"
 
     # The CDN manifest only describes its latest release, so the archive hash can
     # be pinned only while base_version is the current official release.

@@ -26,7 +26,7 @@ The hardware, closed components, and most of the web UI still come from upstream
 
 Железо и закрытые компоненты — как у Sipeed. Кроме **NanoKVM MCP** — русский ввод, HID-макросы, распознавание речи на устройстве и обновления с GitHub.
 
-**Latest build:** [Releases](https://github.com/pekishev/NanoKVM-Pro/releases/latest) (currently based on official **1.2.15**)
+**Latest build:** [Releases](https://github.com/pekishev/NanoKVM-Pro/releases/latest) (currently based on official **1.2.16**)
 
 ## What's new in this fork
 
