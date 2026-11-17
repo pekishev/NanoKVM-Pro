@@ -13,9 +13,9 @@ func applicationRouter(r *gin.Engine) {
 	api := r.Group("/api").Use(middleware.CheckToken())
 
 	api.GET("/application/version", service.GetVersion) // get application version
-	api.POST("/application/update", service.Update)     // update from the selected source or a fork release
-	api.POST("/application/upload", service.Upload)     // install an uploaded fork release archive
-
+	api.GET("/application/update/status", service.GetUpdateStatus)
+	api.POST("/application/update", service.Update)                         // update from the selected source or a fork release
+	api.POST("/application/upload", service.Upload)                         // install an uploaded fork release archive
 	api.GET("/application/update-source", service.GetUpdateSource)          // get update source
 	api.POST("/application/update-source", service.SetUpdateSource)         // set update source
 	api.POST("/application/update-source/reset", service.ResetUpdateSource) // restore official source

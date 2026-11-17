@@ -277,6 +277,29 @@ const ru = {
       cancelBtn: 'Нет'
     },
     settings: {
+      ai: {
+        title: 'AI',
+        mcpService: 'Сервис MCP',
+        description:
+          'Управление удалённым хостом с клавиатуры, мыши и скриншотов из MCP-клиента.',
+        endpoint: 'Адрес',
+        apiKey: 'API-ключ',
+        showApiKey: 'Показать API-ключ',
+        copyApiKey: 'Скопировать API-ключ',
+        copyEndpoint: 'Скопировать адрес',
+        copied: 'Скопировано',
+        copyManually: 'Выделите и скопируйте текст вручную.',
+        regenerate: 'Перевыпустить',
+        regenerateConfirm:
+          'Текущий API-ключ сразу перестанет работать. Обновите ключ в MCP-клиентах.',
+        regenerated: 'API-ключ перевыпущен',
+        cancel: 'Отмена',
+        close: 'Закрыть',
+        authentication:
+          'Используйте Streamable HTTP с Authorization: Bearer <API Key>. Ключ MCP отдельный от веб-логина.',
+        loadFailed: 'Не удалось загрузить настройки MCP',
+        operationFailed: 'Операция не удалась'
+      },
       title: 'Настройки',
       about: {
         title: 'О системе NanoKVM',

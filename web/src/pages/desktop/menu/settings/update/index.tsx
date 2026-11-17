@@ -30,7 +30,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
   const [checking, setChecking] = useState(true);
   const [savingCheck, setSavingCheck] = useState(false);
   const [isCustomSource, setIsCustomSource] = useState(false);
-  const [manualJobID, setManualJobID] = useState('');
+  const [updateJobID, setUpdateJobID] = useState('');
   // Ignore late responses from an earlier check after the source changes.
   const versionRequestID = useRef(0);
 
@@ -49,7 +49,8 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
           return;
         }
 
-        const current = typeof rsp.data.current === 'string' ? semver.valid(rsp.data.current) : null;
+        const current =
+          typeof rsp.data.current === 'string' ? semver.valid(rsp.data.current) : null;
         const latest = typeof rsp.data.latest === 'string' ? semver.valid(rsp.data.latest) : null;
         if (!current || !latest) {
           setStatus('failed');
@@ -89,8 +90,26 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
   }, [t]);
 
   useEffect(() => {
-    checkForUpdates();
-  }, [checkForUpdates]);
+    let active = true;
+    api
+      .getUpdateStatus()
+      .then((rsp) => {
+        if (!active) return;
+        if (rsp.code === 0 && rsp.data?.state === 'installing') {
+          setUpdateJobID(rsp.data.id);
+          setIsLocked(true);
+          setStatus('updating');
+        } else {
+          checkForUpdates();
+        }
+      })
+      .catch(() => {
+        if (active) checkForUpdates();
+      });
+    return () => {
+      active = false;
+    };
+  }, [checkForUpdates, setIsLocked]);
 
   function setUpdateCheck(enable: boolean) {
     if (savingCheck || status === 'updating') {
@@ -124,18 +143,40 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
   function update() {
     if (status !== 'outdated') return;
 
-    setManualJobID('');
+    setUpdateJobID('');
     setIsLocked(true);
     setUploadProgress(undefined);
     setStatus('updating');
 
-    api.update().then((rsp: any) => {
-      if (rsp.code !== 0) {
+    api
+      .update()
+      .then((rsp: any) => {
+        if (rsp.code !== 0) {
+          setIsLocked(false);
+          setStatus('failed');
+          setErrMsg(t('settings.update.updateFailed'));
+          return;
+        }
+        if (rsp.data?.id) {
+          setUpdateJobID(rsp.data.id);
+        }
+      })
+      .catch(async () => {
+        // A service restart can close a response. Recover the submitted job
+        // before deciding that the update failed.
+        try {
+          const rsp = await api.getUpdateStatus();
+          if (rsp.code === 0 && rsp.data?.id && rsp.data.state !== 'staged') {
+            setUpdateJobID(rsp.data.id);
+            return;
+          }
+        } catch {
+          /* The progress screen cannot recover an unreachable server. */
+        }
         setIsLocked(false);
         setStatus('failed');
         setErrMsg(t('settings.update.updateFailed'));
-      }
-    });
+      });
   }
 
   function installForkArchive(file: File) {
@@ -143,7 +184,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
       return;
     }
 
-    setManualJobID('');
+    setUpdateJobID('');
     setIsLocked(true);
     setUploadProgress(0);
     setErrMsg('');
@@ -175,16 +216,16 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
       });
   }
 
-  // Manual jobs use the same progress screen but are polled instead of using
-  // the online updater's WebSocket progress events.
+  // Official packages and firmware use the independent worker. Fork archives
+  // still install through /application/upload and reload after a delay.
   const startManualUpdate = useCallback((jobID: string) => {
-    setManualJobID(jobID);
+    setUpdateJobID(jobID);
     setUploadProgress(undefined);
     setErrMsg('');
     setStatus('updating');
   }, []);
 
-  const failManualUpdate = useCallback(
+  const failUpdate = useCallback(
     (message: string) => {
       setIsLocked(false);
       setStatus('failed');
@@ -193,9 +234,8 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
     [setIsLocked]
   );
 
-  const finishManualUpdate = useCallback(() => {
+  const finishUpdate = useCallback(() => {
     setIsLocked(false);
-    setManualJobID('');
   }, [setIsLocked]);
 
   const handleUpdateSourceChanged = useCallback(() => {
@@ -243,7 +283,7 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
         disabled={status === 'loading' || status === 'updating'}
         setIsLocked={setIsLocked}
         onInstallStarted={startManualUpdate}
-        onInstallFailed={failManualUpdate}
+        onInstallFailed={failUpdate}
         onForkArchiveConfirmed={installForkArchive}
       />
       <Divider className="opacity-50" />
@@ -257,10 +297,10 @@ export const Update = ({ setIsLocked }: UpdateProps) => {
 
         {status === 'updating' && (
           <Updating
+            jobID={updateJobID}
             uploadProgress={uploadProgress}
-            manualJobID={manualJobID}
-            onManualUpdateFailed={failManualUpdate}
-            onManualUpdateSucceeded={finishManualUpdate}
+            onUpdateFailed={failUpdate}
+            onUpdateSucceeded={finishUpdate}
           />
         )}
 

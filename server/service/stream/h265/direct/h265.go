@@ -2,6 +2,7 @@ package direct
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"NanoKVM-Server/service/stream"
@@ -12,16 +13,30 @@ import (
 )
 
 var (
-	streamer = newStreamer()
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
 	}
+	connsMu sync.Mutex
+	conns   = map[*websocket.Conn]struct{}{}
 )
 
 func init() {
-	stream.RegisterClientCloser(streamer.CloseAll)
+	stream.RegisterClientCloser(closeAll)
+}
+
+func closeAll() int {
+	connsMu.Lock()
+	list := make([]*websocket.Conn, 0, len(conns))
+	for ws := range conns {
+		list = append(list, ws)
+	}
+	connsMu.Unlock()
+	for _, ws := range list {
+		_ = ws.Close()
+	}
+	return len(list)
 }
 
 func Connect(c *gin.Context) {
@@ -30,7 +45,13 @@ func Connect(c *gin.Context) {
 		log.Errorf("failed to upgrade to websocket: %s", err)
 		return
 	}
+	connsMu.Lock()
+	conns[ws] = struct{}{}
+	connsMu.Unlock()
 	defer func() {
+		connsMu.Lock()
+		delete(conns, ws)
+		connsMu.Unlock()
 		_ = ws.Close()
 		log.Debugf("h265 websocket disconnected: %s", ws.RemoteAddr())
 	}()
@@ -38,8 +59,10 @@ func Connect(c *gin.Context) {
 
 	_ = ws.SetReadDeadline(time.Time{})
 
-	streamer.addClient(ws)
-	defer streamer.removeClient(ws)
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() { defer close(stopped); writeStream(ws, done) }()
+	defer func() { close(done); _ = ws.Close(); <-stopped }()
 
 	for {
 		if _, _, err := ws.ReadMessage(); err != nil {
