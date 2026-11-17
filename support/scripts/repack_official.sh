@@ -60,6 +60,24 @@ json_field() {
     python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"
 }
 
+# Debian maintainer scripts often end with `exit 0`. Appending ASR after that
+# would never run, so drop a trailing exit and fail if any other exit remains.
+strip_trailing_exit() {
+    python3 - "$1" <<'EOF'
+import pathlib, re, sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text().splitlines()
+while lines and not lines[-1].strip():
+    lines.pop()
+if lines and re.match(r"^\s*exit(\s|$)", lines[-1]):
+    lines.pop()
+    while lines and not lines[-1].strip():
+        lines.pop()
+path.write_text("\n".join(lines) + ("\n" if lines else ""))
+EOF
+}
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -122,10 +140,12 @@ for app in "${apps[@]}"; do
         install -D -m 0755 "${asr_dir}/install.sh" "${tree}/kvmapp/asr/install.sh"
         install -D -m 0644 "${asr_dir}/nanokvm-asr.service" "${tree}/etc/systemd/system/nanokvm-asr.service"
         for script in postinst prerm; do
-            # An official script that exits early would skip the appended ASR steps.
-            ! grep -qE '^[[:space:]]*exit' "${tree}/DEBIAN/${script}" ||
-                die "official ${script} exits early; update the ASR packaging"
-            cat "${asr_dir}/${script}" >>"${tree}/DEBIAN/${script}"
+            maintainer="${tree}/DEBIAN/${script}"
+            strip_trailing_exit "$maintainer"
+            if grep -qE '^[[:space:]]*exit' "$maintainer"; then
+                die "official ${script} exits early; update the ASR packaging: $(grep -nE '^[[:space:]]*exit' "$maintainer")"
+            fi
+            cat "${asr_dir}/${script}" >>"$maintainer"
         done
     fi
 
