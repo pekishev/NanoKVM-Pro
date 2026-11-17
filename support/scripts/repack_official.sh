@@ -60,21 +60,26 @@ json_field() {
     python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"
 }
 
-# Debian maintainer scripts often end with `exit 0`. Appending ASR after that
-# would never run, so drop a trailing exit and fail if any other exit remains.
-strip_trailing_exit() {
-    python3 - "$1" <<'EOF'
-import pathlib, re, sys
+# 1.2.16 postinst/prerm can `exit 0` in the middle. Insert ASR after the
+# shebang / set -e header so those exits cannot skip it.
+insert_after_header() {
+    python3 - "$1" "$2" <<'EOF'
+import pathlib, sys
 
-path = pathlib.Path(sys.argv[1])
-lines = path.read_text().splitlines()
-while lines and not lines[-1].strip():
-    lines.pop()
-if lines and re.match(r"^\s*exit(\s|$)", lines[-1]):
-    lines.pop()
-    while lines and not lines[-1].strip():
-        lines.pop()
-path.write_text("\n".join(lines) + ("\n" if lines else ""))
+maintainer = pathlib.Path(sys.argv[1])
+snippet = pathlib.Path(sys.argv[2]).read_text().splitlines()
+lines = maintainer.read_text().splitlines()
+i = 0
+if lines and lines[0].startswith("#!"):
+    i = 1
+while i < len(lines):
+    stripped = lines[i].strip()
+    if not stripped or stripped.startswith("#") or stripped.startswith("set -"):
+        i += 1
+        continue
+    break
+out = lines[:i] + [""] + snippet + [""] + lines[i:]
+maintainer.write_text("\n".join(out) + "\n")
 EOF
 }
 
@@ -140,12 +145,7 @@ for app in "${apps[@]}"; do
         install -D -m 0755 "${asr_dir}/install.sh" "${tree}/kvmapp/asr/install.sh"
         install -D -m 0644 "${asr_dir}/nanokvm-asr.service" "${tree}/etc/systemd/system/nanokvm-asr.service"
         for script in postinst prerm; do
-            maintainer="${tree}/DEBIAN/${script}"
-            strip_trailing_exit "$maintainer"
-            if grep -qE '^[[:space:]]*exit' "$maintainer"; then
-                die "official ${script} exits early; update the ASR packaging: $(grep -nE '^[[:space:]]*exit' "$maintainer")"
-            fi
-            cat "${asr_dir}/${script}" >>"$maintainer"
+            insert_after_header "${tree}/DEBIAN/${script}" "${asr_dir}/${script}"
         done
     fi
 
